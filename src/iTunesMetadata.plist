@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UIRequiredDeviceCapabilities</key>
+	<dict/>
+	<key>appleId</key>
+	<string>ig.kuz@gmail.com</string>
+	<key>purchaseDate</key>
+	<date>2023-08-11T08:08:08Z</date>
+	<key>artistId</key>
+	<integer>308094652</integer>
+	<key>artistName</key>
+	<string>Yandex LLC</string>
+	<key>bundleShortVersionString</key>
+	<string>135</string>
+	<key>bundleVersion</key>
+	<string>776</string>
+	<key>copyright</key>
+	<string>Igor V. Sementsov</string>
+	<key>drmVersionNumber</key>
+	<integer>0</integer>
+	<key>fileExtension</key>
+	<string>.app</string>
+	<key>gameCenterEnabled</key>
+	<false/>
+	<key>gameCenterEverEnabled</key>
+	<false/>
+	<key>genre</key>
+	<string>Производительность</string>
+	<key>genreId</key>
+	<integer>6007</integer>
+	<key>itemId</key>
+	<integer>553266487</integer>
+	<key>itemName</key>
+	<string>Яндекс.Диск: хранение файлов, обмен файлами и передача через облако</string>
+	<key>kind</key>
+	<string>software</string>
+	<key>playlistName</key>
+	<string>Yandex LLC</string>
+	<key>product-type</key>
+	<string>ios-app</string>
+	<key>rating</key>
+	<dict>
+		<key>content</key>
+		<string>Advisory.NO.UNRESTRICTED_WEB_ACCESS and Advisory.NO.GAMBLING_CONTESTS</string>
+		<key>label</key>
+		<string>4+</string>
+		<key>rank</key>
+		<integer>100</integer>
+		<key>system</key>
+		<string>itunes-games</string>
+	</dict>
+	<key>releaseDate</key>
+	<string>2012-08-28T22:22:31Z</string>
+	<key>s</key>
+	<integer>143469</integer>
+	<key>softwareIcon57x57URL</key>
+	<string>http://a953.phobos.apple.com/us/r30/Purple6/v4/25/fb/4f/25fb4f8b-2e71-4c13-b3e2-8be298a2c6e1/CRV_AP_150x90.jpeg</string>
+	<key>softwareIconNeedsShine</key>
+	<false/>
+	<key>softwareSupportedDeviceIds</key>
+	<array>
+		<integer>2</integer>
+		<integer>9</integer>
+		<integer>4</integer>
+	</array>
+	<key>softwareVersionBundleId</key>
+	<string>ru.yandex.disk</string>
+	<key>softwareVersionExternalIdentifier</key>
+	<integer>428332645</integer>
+	<key>softwareVersionExternalIdentifiers</key>
+	<array>
+		<integer>10111508</integer>
+		<integer>10729068</integer>
+		<integer>11387714</integer>
+		<integer>12000248</integer>
+		<integer>12711038</integer>
+		<integer>13110231</integer>
+		<integer>14355343</integer>
+		<integer>14991425</integer>
+		<integer>15437488</integer>
+		<integer>15516374</integer>
+		<integer>15613342</integer>
+		<integer>15746035</integer>
+		<integer>16017724</integer>
+		<integer>20942645</integer>
+		<integer>43712632</integer>
+		<integer>86402663</integer>
+		<integer>355412654</integer>
+		<integer>428332645</integer>
+		<integer>629062695</integer>
+		<integer>659952833</integer>
+		<integer>702813696</integer>
+		<integer>810917470</integer>
+		<integer>811130793</integer>
+		<integer>811979659</integer>
+		<integer>812286907</integer>
+		<integer>812747592</integer>
+		<integer>813965305</integer>
+	</array>
+	<key>vendorId</key>
+	<integer>214944</integer>
+	<key>versionRestrictions</key>
+	<integer>16843008</integer>
+</dict>
+</plist>
+
