@@ -9,6 +9,7 @@
 #import "TrackListViewController.h"
 #include "Item.h"
 #include "UIKit/UIKit.h"
+#import <AVFoundation/AVFoundation.h>
 #import "QuickLookController.h"
 #include "Foundation/Foundation.h"
 #import "YandexConnect.h"
@@ -32,6 +33,11 @@ static int get_url(void *data, const char *url_str, const char *error){
 		[self showError:[NSString stringWithUTF8String:error]];
 	if (url_str){
 		NSURL *url = [NSURL URLWithString:[NSString stringWithUTF8String:url_str]];
+
+		//AVURLAsset *avAsset = [AVURLAsset URLAssetWithURL:url options:nil];
+		//AVPlayerItem *playerItem = [AVPlayerItem playerItemWithAsset:avAsset];
+    //AVPlayer *audioPlayer = [AVPlayer playerWithPlayerItem:playerItem];
+		//[audioPlayer play];
 		QuickLookController *qc = 
 				[[QuickLookController alloc]initQLPreviewControllerWithURL:url 
 						title:self.selected.title trackId:self.selected.itemId];

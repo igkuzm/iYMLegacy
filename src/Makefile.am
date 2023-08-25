@@ -15,8 +15,6 @@ iYMLegacy_SOURCES = \
 		FeedViewController.m \
 		FavoritesViewController.m \
 		SearchViewController.m \
-		UIImageView+Network.m \
-		FTWCache.m \
 		YandexConnect.m \
 		QuickLookController.m \
 		TrackListViewController.m \
@@ -27,7 +25,7 @@ iYMLegacy_CFLAGS =
 iYMLegacy_OBJCFLAGS = -fno-objc-arc
 
 iYMLegacy_LDFLAGS = \
-			-framework UIKit -framework Foundation -framework QuickLook -framework CoreGraphics
+			-framework UIKit -framework AVFoundation -framework Foundation -framework QuickLook -framework CoreGraphics
 
 iYMLegacy_LDADD = \
 									-lssl -lcurl -L../libs -L/usr/lib/arc -larclite_iphoneos
