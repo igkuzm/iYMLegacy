@@ -1,11 +1,11 @@
 /**
- * File              : FavoritesViewController.m
+ * File              : FeedViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
  * Last Modified Date: 25.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
-#import "FavoritesViewController.h"
+#import "FeedViewController.h"
 #import "TrackListViewController.h"
 #include "Item.h"
 #include "UIKit/UIKit.h"
@@ -15,7 +15,7 @@
 #import "YandexConnect.h"
 #import "../cYandexMusic/cYandexMusic.h"
 
-@implementation FavoritesViewController
+@implementation FeedViewController
 -(void)showError:(NSString *)msg{
 	UIAlertView *alert = 
 			[[UIAlertView alloc]initWithTitle:@"error" 
@@ -27,7 +27,7 @@
 }
 
 static int get_url(void *data, const char *url_str, const char *error){
-	FavoritesViewController *self = (__bridge FavoritesViewController *)data;
+	FeedViewController *self = (__bridge FeedViewController *)data;
 	if (error)
 		[self showError:[NSString stringWithUTF8String:error]];
 	if (url_str){
@@ -43,9 +43,9 @@ static int get_url(void *data, const char *url_str, const char *error){
 	return 0;
 }
 
-static int get_favorites(void *data, track_t *track, const char *error)
+static int get_feed(void *data, playlist_t *playlist,  track_t *track, const char *error)
 { 
-	FavoritesViewController *self = (__bridge FavoritesViewController *)data;
+	FeedViewController *self = (__bridge FeedViewController *)data;
 	if (error)
 		[self showError:[NSString stringWithUTF8String:error]];
 
@@ -59,11 +59,42 @@ static int get_favorites(void *data, track_t *track, const char *error)
 			[self.refreshControl endRefreshing];
 		});
 	}
+	if (playlist){
+		Item *t = [[Item alloc]initWithPlaylist:playlist];
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			// Update your UI
+			[self.loadedData addObject:t];
+			[self filterData];
+			[self.spinner stopAnimating];
+			[self.refreshControl endRefreshing];
+		});
+	}
 	return 0;
 }
 
+static int get_tracks(void *data, track_t *track, const char *error)
+{ 
+	TrackListViewController *tvc = (__bridge TrackListViewController *)data;
+	if (error){
+		dispatch_sync(dispatch_get_main_queue(), ^{
+				[tvc showError:[NSString stringWithUTF8String:error]];
+		});
+	}
+
+	if (track){
+		Item *t = [[Item alloc]initWithTrack:track];
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			// Update your UI
+			[tvc.loadedData addObject:t];
+			[tvc filterData];
+			[tvc.spinner stopAnimating];
+			[tvc.refreshControl endRefreshing];
+		});
+	}
+	return 0;
+}
 - (void)viewDidLoad {
-	[self setTitle:@"Любимые"];	
+	[self setTitle:@"Рекомендации"];	
 	// allocate array
 	self.loadedData = [NSMutableArray array];
 	self.data = [NSArray array];
@@ -71,16 +102,14 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	// check token
 	NSString *token = 
 		[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
-	// get uid
-	NSInteger uid = 
-		[[NSUserDefaults standardUserDefaults]integerForKey:@"uid"];
-	if (!uid){
-		if (token)
-			uid = c_yandex_music_get_uid([token UTF8String]);
-		if (uid)
-			[[NSUserDefaults standardUserDefaults]setInteger:uid forKey:@"uid"];
+	if (!token){
+		// start Yandex Connect
+		YandexConnect *yc = 
+			[[YandexConnect alloc]initWithFrame:[[UIScreen mainScreen] bounds]];
+		[self presentViewController:yc 
+											 animated:TRUE completion:nil];
 	}
-
+	
 	// search bar
 	self.searchBar = 
 		[[UISearchBar alloc] initWithFrame:CGRectMake(0,70,320,44)];
@@ -132,12 +161,6 @@ static int get_favorites(void *data, track_t *track, const char *error)
 		[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
 	if (!token)
 		return;
-
-	NSInteger uid = 
-		[[NSUserDefaults standardUserDefaults]integerForKey:@"uid"];
-	if (!uid)
-		return;
-		
 	// animate spinner
 	CGRect rect = self.view.bounds;
 	self.spinner.center = CGPointMake(rect.size.width/2, rect.size.height/2);
@@ -147,8 +170,7 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0ul);
 	dispatch_async(queue, ^{
 		[self.loadedData removeAllObjects];
-		c_yandex_music_get_favorites(
-				[token UTF8String], "100x100", uid, (__bridge void *)self, get_favorites);
+		c_yandex_music_get_feed([token UTF8String], "100x100", (__bridge void *)self, get_feed);
 	});
 }
 
@@ -168,11 +190,22 @@ static int get_favorites(void *data, track_t *track, const char *error)
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 	Item *item = [self.data objectAtIndex:indexPath.item];
 	UITableViewCell *cell = nil;
-	cell = [self.tableView dequeueReusableCellWithIdentifier:@"cell"];
-	if (cell == nil){
-		cell = [[UITableViewCell alloc]
-		initWithStyle: UITableViewCellStyleSubtitle 
-		reuseIdentifier: @"cell"];
+	if (item.itemType == ITEM_PLAYLIST){
+		cell = [self.tableView dequeueReusableCellWithIdentifier:@"dir"];
+		if (cell == nil){
+			cell = [[UITableViewCell alloc]
+			initWithStyle: UITableViewCellStyleSubtitle 
+			reuseIdentifier: @"dir"];
+		}
+		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	}
+	else{
+		cell = [self.tableView dequeueReusableCellWithIdentifier:@"cell"];
+		if (cell == nil){
+			cell = [[UITableViewCell alloc]
+			initWithStyle: UITableViewCellStyleSubtitle 
+			reuseIdentifier: @"cell"];
+		}
 	}
 	item.imageView = cell.imageView;
 	[cell.textLabel setText:item.title];
@@ -185,11 +218,29 @@ static int get_favorites(void *data, track_t *track, const char *error)
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	self.selected = [self.data objectAtIndex:indexPath.item];
 
-	NSString *token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
-	if (token){
-		c_yandex_music_get_download_url(
-				[token UTF8String], [self.selected.itemId UTF8String], 
-				(__bridge void *)self, get_url);
+	if (self.selected.itemType == ITEM_TRACK){
+		NSString *token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
+		if (token){
+			c_yandex_music_get_download_url(
+					[token UTF8String], [self.selected.itemId UTF8String], 
+					(__bridge void *)self, get_url);
+		}
+	}
+	else if (self.selected.itemType == ITEM_PLAYLIST){
+		NSString *token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
+		if (token){	
+			TrackListViewController *vc = [[TrackListViewController alloc]initWithTitle:
+																			self.selected.title];
+
+			dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0ul);
+				dispatch_async(queue, ^{
+					c_yandex_music_get_playlist_tracks(
+							[token UTF8String], "100x100",
+							self.selected.uid, self.selected.kind,	
+							(__bridge void *)vc, get_tracks);
+				});
+				[self.navigationController pushViewController:vc animated:true];
+		}
 	}
 	// unselect row
 	[tableView deselectRowAtIndexPath:indexPath animated:true];
@@ -198,6 +249,7 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	// hide keyboard
 	[self.searchBar resignFirstResponder];
 }
+
 #pragma mark <SEARCHBAR FUNCTIONS>
 
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText{
@@ -208,7 +260,6 @@ static int get_favorites(void *data, track_t *track, const char *error)
 {
 	[self.searchBar resignFirstResponder];
 }
-
 - (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
 	[searchBar resignFirstResponder];
 }

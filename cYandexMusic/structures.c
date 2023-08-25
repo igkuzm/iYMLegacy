@@ -2,127 +2,12 @@
  * File              : structures.c
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 23.08.2023
+ * Last Modified Date: 25.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
 #include "structures.h"
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#define init_int(p, s, j) \
-	({\
-	  p->s = 0;\
-		cJSON *s = cJSON_GetObjectItem(j, #s);\
-		if (s)\
-			p->s = s->valueint;\
-	})
-
-#define init_string(p, s, j) \
-	({\
-	  p->s = NULL;\
-		cJSON *s = cJSON_GetObjectItem(json, #s);\
-		if (s){\
-			char *str = s->valuestring;\
-			if (str)\
-				p->s = strdup(str);\
-	 }\
-	})
-
-#define free_string(p, s) \
-	({\
-		if (p->s)\
-			free(p->s);\
-		p->s = NULL;\
-	})
-
-
-#define init_string_array(p, s, j) \
-	({\
-		cJSON *s = cJSON_GetObjectItem(j, #s);\
-		if (s){\
-			int i;\
-			int count = cJSON_GetArraySize(s);\
-			p->s = malloc(count * sizeof(char *));\
-			if (!c->s){\
-				perror("malloc");\
-				return;\
-			}\
-			for (i = 0; i < count; ++i) {\
-				p->s[i] = NULL;\
-				cJSON *item = cJSON_GetArrayItem(s, i);\
-				if (item){\
-					char *str = item->valuestring;\
-					if (str)\
-					p->s[i] = strdup(str);\
-				}\
-			}\
-			p->n_##s = count;\
-		}\
-	})
-
-#define free_string_array(p, s) \
-	({\
-		if (p->s){\
-			int i;\
-			for (i = 0; i < c->n_##s; ++i) {\
-				if(p->s[i])\
-					free(p->s[i]);\
-				p->s[i] = NULL;\
-			}\
-			free(p->s);\
-		}\
-	})
-
-
-#define init_struct(p, s, j, T) \
-	({\
-		cJSON *s = cJSON_GetObjectItem(json, #s);\
-		if (s)\
-			init_##T(&(p->s), s);\
-	})
-
-#define free_struct(p, s, T) \
-	({\
-		struct T member = p->s;\
-		free_##T(&member);\
-	})
-
-
-#define init_struct_array(p, s, j, T) \
-	({\
-		cJSON *s = cJSON_GetObjectItem(json, #s);\
-		if (s){\
-			int i;\
-			int count = cJSON_GetArraySize(s);\
-			p->s = malloc(count * sizeof(struct T));\
-			if (!p->s){\
-				perror("malloc");\
-				return;\
-			}\
-			for (i = 0; i < count; ++i) {\
-				struct T member = p->s[i];\
-				memset(&member, 0, sizeof(struct T));\
-				cJSON *item = cJSON_GetArrayItem(s, i);\
-				if (item)\
-					init_##T(&member, item);\
-			}\
-			p->n_##s = count;\
-		}\
-	})
-
-#define free_struct_array(p, s, T) \
-	({\
-		if (p->s){\
-			int i;\
-			for (i = 0; i < p->n_##s; ++i) {\
-				struct T member = p->s[i];\
-				free_##T(&member);\
-			}\
-			free(p->s);\
-		}\
-	})
 
 void init_cover(cover_t *c, cJSON *json){
 	init_int(c, custom, json);
@@ -355,17 +240,6 @@ void free_playlist(struct playlist *c) {
 	free_struct(c, playCounter, playCounter);
 }
 
-#define new_from_json(T, j)\
-	({\
-	 struct T *ptr = (struct T *)malloc(sizeof(struct T));\
-	 if (!ptr){\
-		perror("malloc");\
-		return NULL;\
-	 }\
-	 init_##T(ptr, j);\
-	 ptr;\
-	})		
-
 track_t * c_yandex_music_track_new_from_json(cJSON *json){
 	return new_from_json(track, json);
 }
@@ -376,3 +250,12 @@ void c_yandex_music_track_free(track_t *track){
 	}
 }
 
+playlist_t *c_yandex_music_playlist_new_from_json(cJSON *json){
+	return new_from_json(playlist, json);
+}
+void c_yandex_music_playlist_free(playlist_t *p){
+	if (p){
+		free_playlist(p);
+		free(p);
+	}
+}

@@ -37,10 +37,10 @@
 		<dict>
 			<key>CFBundleIconFiles</key>
 			<array>
-				<string>AppIcon29x29</string>
-				<string>AppIcon40x40</string>
-				<string>AppIcon57x57</string>
-				<string>AppIcon60x60</string>
+				<string>Icon</string>
+				<string>Icon@2x</string>
+				<string>Icon-small</string>
+				<string>Icon-small@2x</string>
 			</array>
 		</dict>
 	</dict>
@@ -50,13 +50,10 @@
 		<dict>
 			<key>CFBundleIconFiles</key>
 			<array>
-				<string>AppIcon29x29</string>
-				<string>AppIcon40x40</string>
-				<string>AppIcon57x57</string>
-				<string>AppIcon60x60</string>
-				<string>AppIcon50x50</string>
-				<string>AppIcon72x72</string>
-				<string>AppIcon76x76</string>
+				<string>Icon</string>
+				<string>Icon@2x</string>
+				<string>Icon-small</string>
+				<string>Icon-small@2x</string>
 			</array>
 		</dict>
 	</dict>
