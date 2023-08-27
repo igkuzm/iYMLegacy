@@ -62,7 +62,7 @@
 
 int search_tracks(void *data, playlist_t *playlist, track_t *track, const char *error)
 {
-	SearchViewController *self = data;
+	SearchViewController *self = (__bridge SearchViewController *)data;
 	if (error)
 		[self showError:[NSString stringWithUTF8String:error]];
 
@@ -99,7 +99,7 @@ int search_tracks(void *data, playlist_t *playlist, track_t *track, const char *
 }
 
 static int get_url(void *data, const char *url_str, const char *error){
-	SearchViewController *self = data;
+	SearchViewController *self = (__bridge SearchViewController *)data;
 	if (error)
 		[self showError:[NSString stringWithUTF8String:error]];
 	if (url_str){
@@ -169,7 +169,7 @@ static int get_tracks(void *data, track_t *track, const char *error)
 				[token UTF8String], 
 				[self.searchBar.text UTF8String],
 				"100x100",
-				self, 
+				(__bridge void*)self, 
 				search_tracks);
 	}];
 	//});

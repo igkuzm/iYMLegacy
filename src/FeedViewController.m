@@ -2,7 +2,7 @@
  * File              : FeedViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 25.08.2023
+ * Last Modified Date: 27.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "FeedViewController.h"
@@ -94,7 +94,7 @@ static int get_tracks(void *data, track_t *track, const char *error)
 	return 0;
 }
 - (void)viewDidLoad {
-	[self setTitle:@"Рекомендации"];	
+	[self setTitle:@"Популярные"];	
 	// allocate array
 	self.loadedData = [NSMutableArray array];
 	self.data = [NSArray array];

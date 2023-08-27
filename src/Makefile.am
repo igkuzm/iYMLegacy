@@ -18,14 +18,17 @@ iYMLegacy_SOURCES = \
 		YandexConnect.m \
 		QuickLookController.m \
 		TrackListViewController.m \
+		AudioPlayer.m \
+		PlayerViewController.m \
+		CCAudioPlayer.m \
 		main.m
 
-iYMLegacy_CFLAGS =
+iYMLegacy_CFLAGS = 
 
-iYMLegacy_OBJCFLAGS = -fno-objc-arc
+iYMLegacy_OBJCFLAGS = -fobjc-arc
 
 iYMLegacy_LDFLAGS = \
-			-framework UIKit -framework AVFoundation -framework Foundation -framework QuickLook -framework CoreGraphics
+			-framework UIKit -framework MediaPlayer -framework CoreMedia -framework AVFoundation -framework Foundation -framework QuickLook -framework CoreGraphics
 
 iYMLegacy_LDADD = \
 									-lssl -lcurl -L../libs -L/usr/lib/arc -larclite_iphoneos
@@ -42,8 +45,14 @@ _plist:
 
 _images:
 	cp -f ../images/Icon*.png iYMLegacy.app/.
+	cp -f ../images/player*.png iYMLegacy.app/.
+	cp -f ../images/roudcorners.png iYMLegacy.app/.
 
-iYMLegacy.app: iYMLegacy _dir _plist _images
+_nibs:
+	cp -fr ../lproj/* iYMLegacy.app/.
+	cp -fr ../nibs/*.nib iYMLegacy.app/.
+
+iYMLegacy.app: iYMLegacy _dir _plist _images _nibs
 	cp -f iYMLegacy iYMLegacy.app/. 
 	cp -r ../libs iYMLegacy.app/.
 	cd iYMLegacy.app; \

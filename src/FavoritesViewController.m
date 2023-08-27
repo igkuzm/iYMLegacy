@@ -2,7 +2,7 @@
  * File              : FavoritesViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 25.08.2023
+ * Last Modified Date: 27.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "FavoritesViewController.h"
@@ -11,6 +11,7 @@
 #include "UIKit/UIKit.h"
 #import <AVFoundation/AVFoundation.h>
 #import "QuickLookController.h"
+#import "AudioPlayer.h"
 #include "Foundation/Foundation.h"
 #import "YandexConnect.h"
 #import "YandexConnect.h"
@@ -33,17 +34,14 @@ static int get_url(void *data, const char *url_str, const char *error){
 		[self showError:[NSString stringWithUTF8String:error]];
 	if (url_str){
 		NSURL *url = [NSURL URLWithString:[NSString stringWithUTF8String:url_str]];
+		dispatch_sync(dispatch_get_main_queue(), ^{
+				[self.cellSpinner stopAnimating];
+				AudioPlayer *ap = [[AudioPlayer alloc]
+				initWiithURL:url title:self.selected.title trackId:self.selected.itemId];
+				UINavigationController *nc = [[UINavigationController alloc]initWithRootViewController:ap];
+				[self presentViewController:nc animated:TRUE completion:nil];
+		});
 
-		//AVURLAsset *avAsset = [AVURLAsset URLAssetWithURL:url options:nil];
-		//AVPlayerItem *playerItem = [AVPlayerItem playerItemWithAsset:avAsset];
-    //AVPlayer *audioPlayer = [AVPlayer playerWithPlayerItem:playerItem];
-		//[audioPlayer play];
-		QuickLookController *qc = 
-				[[QuickLookController alloc]initQLPreviewControllerWithURL:url 
-						title:self.selected.title trackId:self.selected.itemId];
-		[self presentViewController:qc 
-											 animated:TRUE completion:nil];
-		//[self.navigationController pushViewController:qc animated:true];
 		return 1;
 	}
 	return 0;
@@ -69,7 +67,9 @@ static int get_favorites(void *data, track_t *track, const char *error)
 }
 
 - (void)viewDidLoad {
-	[self setTitle:@"Любимые"];	
+	[self setTitle:@"Избранное"];	
+	
+	self.URLsync = [[NSOperationQueue alloc]init];
 	// allocate array
 	self.loadedData = [NSMutableArray array];
 	self.data = [NSArray array];
@@ -179,23 +179,34 @@ static int get_favorites(void *data, track_t *track, const char *error)
 		cell = [[UITableViewCell alloc]
 		initWithStyle: UITableViewCellStyleSubtitle 
 		reuseIdentifier: @"cell"];
+		cell.accessoryView = 
+			[[UIActivityIndicatorView alloc] 
+			initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
 	}
 	item.imageView = cell.imageView;
 	[cell.textLabel setText:item.title];
 	[cell.detailTextLabel setText:item.subtitle];	
 	if (item.coverImage)
 		[cell.imageView setImage:item.coverImage];
-	return cell;
+		return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	self.selected = [self.data objectAtIndex:indexPath.item];
-
+	[self.URLsync cancelAllOperations];
+	
 	NSString *token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
 	if (token){
-		c_yandex_music_get_download_url(
-				[token UTF8String], [self.selected.itemId UTF8String], 
-				(__bridge void *)self, get_url);
+		UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+		UIActivityIndicatorView *spinner = 
+			(UIActivityIndicatorView*)cell.accessoryView;
+		[spinner startAnimating];
+		self.cellSpinner = spinner;
+		[self.URLsync addOperationWithBlock:^{
+				c_yandex_music_get_download_url(
+						[token UTF8String], [self.selected.itemId UTF8String], 
+						(__bridge void *)self, get_url);
+		}];
 	}
 	// unselect row
 	[tableView deselectRowAtIndexPath:indexPath animated:true];
