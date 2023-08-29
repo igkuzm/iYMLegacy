@@ -2,7 +2,7 @@
  * File              : cYandexMusic.c
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 25.08.2023
+ * Last Modified Date: 29.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -911,4 +911,42 @@ int c_yandex_music_get_favorites(
 			"GET", token, NULL, &d, c_yandex_music_get_favorites_cb, method, NULL);
 }
 
+struct c_yandex_music_post_current_data {
+	void *user_data; 
+	int (*callback)(void *, const char *);
+	const char *token;       
+};
+
+static void c_yandex_music_post_current_cb(
+		void *data, const char *str, const char *error)
+{
+	struct c_yandex_music_post_current_data *d = data;
+	
+	if (error)
+		if (d->callback)
+			d->callback(d->user_data, error);
+}
+
+int c_yandex_music_post_current(
+		const char *token,       // authorization token
+		const char *trackId,
+		void *user_data, 
+		void (*callback)         // response and error handler - NULL-able
+				(void *user_data,
+				 const char *error))
+{
+	struct c_yandex_music_post_current_data d = 
+		{user_data, callback, token};
+	
+	char body[BUFSIZ] = "";
+	sprintf(body, 
+			"{"
+			"\"track-id\":\"%s\","
+			"\"from\":\"cYandexMusic\""
+			"}", trackId);
+	
+	return c_yandex_music_run_method(
+			"POST", token, body, &d, c_yandex_music_post_current_cb, "play-audio", NULL);
+}
+	
 

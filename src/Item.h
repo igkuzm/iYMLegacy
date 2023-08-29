@@ -2,7 +2,7 @@
  * File              : Item.h
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 24.08.2023
- * Last Modified Date: 27.08.2023
+ * Last Modified Date: 28.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -31,19 +31,21 @@ typedef enum {
 @property long kind;
 @property (strong) NSURL *coverUri;
 @property (strong) NSURL *downloadURL;
+@property BOOL hasDownloadURL;
 @property (strong) UIImage *coverImage;       // small image 100x100
 @property (strong) UIImageView *imageView;    
 @property (strong) UIImage *artImage;         // fullsize image
 @property (strong) NSURL *artImageURL;        
+@property BOOL hasAtrImage;
 @property (strong) UIImageView *artImageView; 
-@property (strong) NSURL *fileURL;            // file mp3
 @property (strong) AVPlayerItem *playerItem;
-@property (strong) NSOperationQueue *prepareFile;
+@property (strong) NSOperationQueue *prepareDownloadURL;
 @property (strong) NSOperationQueue *prepareImage;
 -(id)initWithTrack:(track_t *)track token:(NSString *)token;
 -(id)initWithPlaylist:(playlist_t *)playlist token:(NSString *)token;
--(void)prepareFile:(void (^) (Item *item))onFileReady andImage:(void (^)(Item *item))onImageReady;
-@property (copy) void (^onFileReady)(Item *item);
+-(void)prepareDownloadURL:(void (^) (Item *item))onDownloadURLReady;
+-(void)prepareImage:(void (^)(Item *item))onImageReady;
+@property (copy) void (^onDownloadURLReady)(Item *item);
 @property (copy) void (^onImageReady)(Item *item);
 @end
 

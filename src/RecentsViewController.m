@@ -1,11 +1,11 @@
 /**
- * File              : TrackListViewController.m
+ * File              : RecentsViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
  * Last Modified Date: 29.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
-#import "TrackListViewController.h"
+#import "RecentsViewController.h"
 #import "PlayerViewController.h"
 #include "Item.h"
 #include "UIKit/UIKit.h"
@@ -14,21 +14,12 @@
 #import "../cYandexMusic/cYandexMusic.h"
 #import "ActionSheet.h"
 
-@implementation TrackListViewController
-- (id)initWithTitle:(NSString *)title
-{
-	if (self = [super init]) {
-		self.title = title;
-		self.loadedData = [NSMutableArray array];
-	}
-	return self;
-}
+@implementation RecentsViewController
 
 - (void)viewDidLoad {
+	self.title = @"Недавние";
 	self.appDelegate = [[UIApplication sharedApplication]delegate];
-	// allocate array
-	self.data = [NSArray array];
-		
+	self.loadedData = [NSMutableArray array];
 	self.token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
 	
 	// search bar
@@ -43,13 +34,6 @@
 		[[UIRefreshControl alloc]init];
 	[self.refreshControl setAttributedTitle:[[NSAttributedString alloc] initWithString:@""]];
 	[self.refreshControl addTarget:self action:@selector(refresh:) forControlEvents:UIControlEventValueChanged];
-
-	//spinner
-	self.spinner = 
-		[[UIActivityIndicatorView alloc] 
-		initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
-	[self.tableView addSubview:self.spinner];
-	self.spinner.tag = 12;
 
 	// play button
 	UIBarButtonItem *playButtonItem = 
@@ -82,12 +66,6 @@
 }
 
 -(void)reloadData{
-	// animate spinner
-	CGRect rect = self.view.bounds;
-	self.spinner.center = CGPointMake(rect.size.width/2, rect.size.height/2);
-	if (!self.refreshControl.refreshing)
-		[self.spinner startAnimating];
-
 	[self filterData];
 	[self.refreshControl endRefreshing];
 }
@@ -114,26 +92,43 @@
 		initWithStyle: UITableViewCellStyleSubtitle 
 		reuseIdentifier: @"cell"];
 	}
-	cell.accessoryView = 
-			[[UIActivityIndicatorView alloc] 
-			initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
 	item.imageView = cell.imageView;
 	[cell.textLabel setText:item.title];
 	[cell.detailTextLabel setText:item.subtitle];	
 	if (item.coverImage)
 		[cell.imageView setImage:item.coverImage];
+	if (self.appDelegate.player.current == indexPath.item)
+	{
+		[self.appDelegate.player.view removeFromSuperview];
+		[self.appDelegate.player setControlStyle:MPMovieControlStyleEmbedded];
+		[self.appDelegate.player.view setFrame:cell.contentView.frame];
+		[self.appDelegate.player setScalingMode:MPMovieScalingModeAspectFill];
+		[cell.contentView addSubview:self.appDelegate.player.view];
+	}
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	self.selected = [self.data objectAtIndex:indexPath.item];
 	UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-		UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
-		[spinner startAnimating];
-		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected onDone:^{
-			[spinner stopAnimating];
-		}];
-		[as showInView:tableView];
+	__block UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
+	cell.accessoryView = spinner; 
+	[spinner startAnimating];
+
+	self.appDelegate.player.current = indexPath.item;
+	[self.appDelegate.player playCurrent:^{
+		[spinner stopAnimating];
+		[spinner removeFromSuperview];
+		[cell setAccessoryView:nil];
+		[self refresh:nil];
+	}];
+	//self.selected = [self.data objectAtIndex:indexPath.item];
+	//UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+		//UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
+		//[spinner startAnimating];
+		//ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected onDone:^{
+			//[spinner stopAnimating];
+		//}];
+		//[as showInView:tableView];
 		
 		// unselect row
 	[tableView deselectRowAtIndexPath:indexPath animated:true];

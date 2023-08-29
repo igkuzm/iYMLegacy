@@ -2,7 +2,7 @@
  * File              : cYandexMusic.h
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 25.08.2023
+ * Last Modified Date: 29.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -109,6 +109,16 @@ int c_yandex_music_get_track_by_id(
 				 track_t * track,
 				 const char *error));
 
+/* post to yandex music current listning track
+ * Return 0 on success or -1 on error*/
+int c_yandex_music_post_current(
+		const char *token,       // authorization token
+		const char *trackId,
+		void *user_data, 
+		void (*callback)         // response and error handler - NULL-able
+				(void *user_data,
+				 const char *error));
+	
 #ifdef __cplusplus
 }  /* end of the 'extern "C"' block */
 #endif

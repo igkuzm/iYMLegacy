@@ -2,34 +2,29 @@
  * File              : SearchViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 25.08.2023
+ * Last Modified Date: 29.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "SearchViewController.h"
 #include "Item.h"
 #import "TrackListViewController.h"
 #include "UIKit/UIKit.h"
-#import "QuickLookController.h"
+#import "PlayerViewController.h"
 #include "Foundation/Foundation.h"
 #import "YandexConnect.h"
 #import "../cYandexMusic/cYandexMusic.h"
+#import "ActionSheet.h"
 
 @implementation SearchViewController
--(void)showError:(NSString *)msg{
-	UIAlertView *alert = 
-			[[UIAlertView alloc]initWithTitle:@"error" 
-			message:msg 
-			delegate:nil 
-			cancelButtonTitle:@"Закрыть" 
-			otherButtonTitles:nil];
-	[alert show];
-}
 
 - (void)viewDidLoad {
 	[self setTitle:@"Поиск"];
 	
-	self.sync = [[NSOperationQueue alloc]init];
+	self.syncData = [[NSOperationQueue alloc]init];
+	self.syncTracks = [[NSOperationQueue alloc]init];
 
+	self.token = 
+		[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
 	// allocate array
 	self.best = [NSMutableArray array];
 	self.tracks = [NSMutableArray array];
@@ -43,14 +38,18 @@
 	self.searchBar.delegate = self;
 	self.searchBar.placeholder = @"Поиск:";
 
-	// editing style
-	self.tableView.allowsMultipleSelectionDuringEditing = false;
-	
 	// refresh control
 	self.refreshControl=
 		[[UIRefreshControl alloc]init];
 	[self.refreshControl setAttributedTitle:[[NSAttributedString alloc] initWithString:@""]];
 	[self.refreshControl addTarget:self action:@selector(refresh:) forControlEvents:UIControlEventValueChanged];
+
+	// play button
+	UIBarButtonItem *playButtonItem = 
+		[[UIBarButtonItem alloc]
+				initWithBarButtonSystemItem:UIBarButtonSystemItemPlay 
+				target:self.appDelegate action:@selector(playButtonPushed:)]; 
+	self.navigationItem.rightBarButtonItem = playButtonItem;
 
 	//spinner
 	self.spinner = 
@@ -63,11 +62,12 @@
 int search_tracks(void *data, playlist_t *playlist, track_t *track, const char *error)
 {
 	SearchViewController *self = (__bridge SearchViewController *)data;
-	if (error)
-		[self showError:[NSString stringWithUTF8String:error]];
+	if (error){
+		NSLog(@"%s", error);
+	}
 
 	if (track){
-		Item *t = [[Item alloc]initWithTrack:track];
+		Item *t = [[Item alloc]initWithTrack:track token:self.token];
 		dispatch_sync(dispatch_get_main_queue(), ^{
 			// Update your UI
 				if (!self.additional){
@@ -85,7 +85,7 @@ int search_tracks(void *data, playlist_t *playlist, track_t *track, const char *
 		});
 	}
 	else if (playlist){
-		Item *t = [[Item alloc]initWithPlaylist:playlist];
+		Item *t = [[Item alloc]initWithPlaylist:playlist token:self.token];
 		dispatch_sync(dispatch_get_main_queue(), ^{
 			// Update your UI
 			[self.playlists addObject:t];
@@ -98,33 +98,15 @@ int search_tracks(void *data, playlist_t *playlist, track_t *track, const char *
 
 }
 
-static int get_url(void *data, const char *url_str, const char *error){
-	SearchViewController *self = (__bridge SearchViewController *)data;
-	if (error)
-		[self showError:[NSString stringWithUTF8String:error]];
-	if (url_str){
-		NSURL *url = [NSURL URLWithString:[NSString stringWithUTF8String:url_str]];
-		QuickLookController *qc = 
-				[[QuickLookController alloc]initQLPreviewControllerWithURL:url 
-						title:self.selected.title trackId:self.selected.itemId];
-		[self presentViewController:qc 
-											 animated:TRUE completion:nil];
-		return 1;
-	}
-	return 0;
-}
-
 static int get_tracks(void *data, track_t *track, const char *error)
 { 
 	TrackListViewController *tvc = (__bridge TrackListViewController *)data;
 	if (error){
-		dispatch_sync(dispatch_get_main_queue(), ^{
-				[tvc showError:[NSString stringWithUTF8String:error]];
-		});
+		NSLog(@"%s", error);
 	}
 
 	if (track){
-		Item *t = [[Item alloc]initWithTrack:track];
+		Item *t = [[Item alloc]initWithTrack:track token:tvc.token];
 		dispatch_sync(dispatch_get_main_queue(), ^{
 			// Update your UI
 			[tvc.loadedData addObject:t];
@@ -137,7 +119,7 @@ static int get_tracks(void *data, track_t *track, const char *error)
 }
 -(void)reloadData{
 	// stop all sync
-	[self.sync cancelAllOperations];
+	[self.syncData cancelAllOperations];
 
 	if (!self.searchBar.text || self.searchBar.text.length < 1){
 		[self.refreshControl endRefreshing];
@@ -155,6 +137,7 @@ static int get_tracks(void *data, track_t *track, const char *error)
 	
 	self.additional = false;
 	
+	
 	[self.best removeAllObjects];
 	[self.tracks removeAllObjects];
 	[self.podcasts removeAllObjects];
@@ -162,9 +145,7 @@ static int get_tracks(void *data, track_t *track, const char *error)
 	
 	[self.tableView reloadData];
 	
-	//dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0ul);
-	//dispatch_async(queue, ^{
-  [self.sync addOperationWithBlock:^{
+  [self.syncData addOperationWithBlock:^{
 		c_yandex_music_search(
 				[token UTF8String], 
 				[self.searchBar.text UTF8String],
@@ -231,6 +212,9 @@ static int get_tracks(void *data, track_t *track, const char *error)
 			reuseIdentifier: @"cell"];
 		}
 	}
+	cell.accessoryView = 
+			[[UIActivityIndicatorView alloc] 
+			initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
 	item.imageView = cell.imageView;
 	[cell.textLabel setText:item.title];
 	[cell.detailTextLabel setText:item.subtitle];	
@@ -248,12 +232,18 @@ static int get_tracks(void *data, track_t *track, const char *error)
 	}
 	self.selected = [data objectAtIndex:indexPath.item];
 
-	if (self.selected.itemType == ITEM_TRACK || self.selected.itemType == ITEM_PODCAST_EPOSODE){
+	if (self.selected.itemType == ITEM_TRACK || 
+			self.selected.itemType == ITEM_PODCAST_EPOSODE)
+	{
 		NSString *token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
 		if (token){
-			c_yandex_music_get_download_url(
-					[token UTF8String], [self.selected.itemId UTF8String], 
-					(__bridge void *)self, get_url);
+			UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+			UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
+			[spinner startAnimating];
+				ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected onDone:^{
+				[spinner stopAnimating];
+			}];
+			[as showInView:tableView];		
 		}
 	}
 	else if (self.selected.itemType == ITEM_PLAYLIST){
@@ -262,14 +252,14 @@ static int get_tracks(void *data, track_t *track, const char *error)
 			TrackListViewController *vc = [[TrackListViewController alloc]initWithTitle:
 																			self.selected.title];
 
-			dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0ul);
-				dispatch_async(queue, ^{
+			[self.syncTracks cancelAllOperations];
+			[self.syncTracks addOperationWithBlock:^{
 					c_yandex_music_get_playlist_tracks(
 							[token UTF8String], "100x100",
 							self.selected.uid, self.selected.kind,	
 							(__bridge void *)vc, get_tracks);
-				});
-				[self.navigationController pushViewController:vc animated:true];
+			}];
+			[self.navigationController pushViewController:vc animated:true];
 		}
 	}	// unselect row
 	[tableView deselectRowAtIndexPath:indexPath animated:true];

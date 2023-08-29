@@ -2,7 +2,7 @@
  * File              : RootViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 27.08.2023
+ * Last Modified Date: 29.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "RootViewController.h"
@@ -13,58 +13,19 @@
 #import "FavoritesViewController.h"
 #import "SearchViewController.h"
 #import "PlayerViewController.h"
-#include "AVFoundation/AVAudioSession.h"
+#import "PlaylistViewController.h"
+#import "RecentsViewController.h"
 
 @implementation RootViewController
 - (void)viewDidLoad {
 	
-	AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-	 if (audioSession.category != AVAudioSessionCategoryPlayback) {
-		UIDevice *device = [UIDevice currentDevice];
-	  if ([device respondsToSelector:@selector(isMultitaskingSupported)]) {
-			if (device.multitaskingSupported) {
-					NSError *setCategoryError = nil;
-					[audioSession setCategory:AVAudioSessionCategoryPlayback
-					withOptions:AVAudioSessionCategoryOptionAllowBluetooth
-					error:&setCategoryError];
-					
-				NSError *activationError = nil;
-				[audioSession setActive:YES error:&activationError];	
-			}						        
-		}							    
-	}
-
-	// init player
-	//AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-	//NSError *error = nil;
-	//[audioSession
-		//setCategory:AVAudioSessionCategoryPlayback 
-		////withOptions:AVAudioSessionCategoryOptionMixWithOthers|AVAudioSessionCategoryOptionAllowBluetooth
-					 //error:&error];
-	//if (error)
-		//[self showError:error.description];
-		////NSLog(@"%@", error.description);
-	//else 
-		//[audioSession setActive:true error:&error];
-	//if (error)
-		//[self showError:error.description];
-		////NSLog(@"%@", error.description);
-	//[[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
-
-	AppDelegate *appDelegate = [[UIApplication sharedApplication]delegate];
-	appDelegate.playlist = [NSMutableArray array];
-	appDelegate.player  = [[AVQueuePlayer alloc]initWithItems:appDelegate.playlist];
-	[appDelegate.player setAllowsExternalPlayback:true];
-	[appDelegate.player setAllowsAirPlayVideo:true];
-	
 	// feed view
-	//FeedViewController *feedvc = 
-	PlayerViewController *feedvc = 
-		[[PlayerViewController alloc]init];
+	FeedViewController *feedvc = 
+		[[FeedViewController alloc]init];
 	UINavigationController *feednc =
 		[[UINavigationController alloc]initWithRootViewController:feedvc];
 	UITabBarItem *feedtbi = [[UITabBarItem alloc]
-			initWithTabBarSystemItem:UITabBarSystemItemMostViewed tag:0];
+			initWithTabBarSystemItem:UITabBarSystemItemFeatured tag:0];
 	[feednc setTabBarItem:feedtbi];
 
 	// search view
@@ -85,18 +46,19 @@
 			initWithTabBarSystemItem:UITabBarSystemItemFavorites tag:2];
 	[favnc setTabBarItem:favtbi];
 
+	// recents view
+	RecentsViewController *plvc = 
+		[[RecentsViewController alloc]init];
+	UINavigationController *plnc =
+		[[UINavigationController alloc]initWithRootViewController:plvc];
+	UITabBarItem *pltbi = [[UITabBarItem alloc]
+			initWithTabBarSystemItem:UITabBarSystemItemRecents tag:3];
+	[plnc setTabBarItem:pltbi];
 
-	[self setViewControllers:@[feednc, searchnc, favnc] animated:TRUE];
+
+	[self setViewControllers:@[feednc, searchnc, favnc, plnc] animated:TRUE];
 }
--(void)showError:(NSString *)msg{
-	UIAlertView *alert = 
-			[[UIAlertView alloc]initWithTitle:@"error" 
-			message:msg 
-			delegate:nil 
-			cancelButtonTitle:@"Закрыть" 
-			otherButtonTitles:nil];
-	[alert show];
-}
+
 @end
 
 

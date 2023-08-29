@@ -16,11 +16,12 @@ iYMLegacy_SOURCES = \
 		FavoritesViewController.m \
 		SearchViewController.m \
 		YandexConnect.m \
-		QuickLookController.m \
 		TrackListViewController.m \
-		AudioPlayer.m \
 		PlayerViewController.m \
-		CCAudioPlayer.m \
+		PlaylistViewController.m \
+		RecentsViewController.m \
+		PlayerController.m \
+		ActionSheet.m \
 		main.m
 
 iYMLegacy_CFLAGS = 
@@ -50,7 +51,6 @@ _images:
 
 _nibs:
 	cp -fr ../lproj/* iYMLegacy.app/.
-	cp -fr ../nibs/*.nib iYMLegacy.app/.
 
 iYMLegacy.app: iYMLegacy _dir _plist _images _nibs
 	cp -f iYMLegacy iYMLegacy.app/. 

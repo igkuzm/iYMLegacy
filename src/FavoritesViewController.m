@@ -2,74 +2,28 @@
  * File              : FavoritesViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 27.08.2023
+ * Last Modified Date: 29.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "FavoritesViewController.h"
+#include "AppDelegate.h"
 #import "TrackListViewController.h"
 #include "Item.h"
 #include "UIKit/UIKit.h"
-#import <AVFoundation/AVFoundation.h>
-#import "QuickLookController.h"
-#import "AudioPlayer.h"
 #include "Foundation/Foundation.h"
 #import "YandexConnect.h"
 #import "YandexConnect.h"
 #import "../cYandexMusic/cYandexMusic.h"
+#import "PlayerViewController.h"
+#import "ActionSheet.h"
 
 @implementation FavoritesViewController
--(void)showError:(NSString *)msg{
-	UIAlertView *alert = 
-			[[UIAlertView alloc]initWithTitle:@"error" 
-			message:msg 
-			delegate:nil 
-			cancelButtonTitle:@"Закрыть" 
-			otherButtonTitles:nil];
-	[alert show];
-}
-
-static int get_url(void *data, const char *url_str, const char *error){
-	FavoritesViewController *self = (__bridge FavoritesViewController *)data;
-	if (error)
-		[self showError:[NSString stringWithUTF8String:error]];
-	if (url_str){
-		NSURL *url = [NSURL URLWithString:[NSString stringWithUTF8String:url_str]];
-		dispatch_sync(dispatch_get_main_queue(), ^{
-				[self.cellSpinner stopAnimating];
-				AudioPlayer *ap = [[AudioPlayer alloc]
-				initWiithURL:url title:self.selected.title trackId:self.selected.itemId];
-				UINavigationController *nc = [[UINavigationController alloc]initWithRootViewController:ap];
-				[self presentViewController:nc animated:TRUE completion:nil];
-		});
-
-		return 1;
-	}
-	return 0;
-}
-
-static int get_favorites(void *data, track_t *track, const char *error)
-{ 
-	FavoritesViewController *self = (__bridge FavoritesViewController *)data;
-	if (error)
-		[self showError:[NSString stringWithUTF8String:error]];
-
-	if (track){
-		Item *t = [[Item alloc]initWithTrack:track];
-		dispatch_sync(dispatch_get_main_queue(), ^{
-			// Update your UI
-			[self.loadedData addObject:t];
-			[self filterData];
-			[self.spinner stopAnimating];
-			[self.refreshControl endRefreshing];
-		});
-	}
-	return 0;
-}
 
 - (void)viewDidLoad {
 	[self setTitle:@"Избранное"];	
+	self.appDelegate = [[UIApplication sharedApplication]delegate];
 	
-	self.URLsync = [[NSOperationQueue alloc]init];
+	self.syncData = [[NSOperationQueue alloc]init];
 	// allocate array
 	self.loadedData = [NSMutableArray array];
 	self.data = [NSArray array];
@@ -77,6 +31,7 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	// check token
 	NSString *token = 
 		[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
+	self.token = token;
 	// get uid
 	NSInteger uid = 
 		[[NSUserDefaults standardUserDefaults]integerForKey:@"uid"];
@@ -94,9 +49,6 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	self.searchBar.delegate = self;
 	self.searchBar.placeholder = @"Поиск:";
 
-	// editing style
-	self.tableView.allowsMultipleSelectionDuringEditing = false;
-	
 	// refresh control
 	self.refreshControl=
 		[[UIRefreshControl alloc]init];
@@ -110,8 +62,35 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	[self.tableView addSubview:self.spinner];
 	self.spinner.tag = 12;
 
+	// play button
+	UIBarButtonItem *playButtonItem = 
+		[[UIBarButtonItem alloc]
+				initWithBarButtonSystemItem:UIBarButtonSystemItemPlay 
+				target:self.appDelegate action:@selector(playButtonPushed:)]; 
+	self.navigationItem.rightBarButtonItem = playButtonItem;
+
 	// load data
 	[self reloadData];
+}
+
+static int get_favorites(void *data, track_t *track, const char *error)
+{ 
+	FavoritesViewController *self = (__bridge FavoritesViewController *)data;
+	if (error){
+		NSLog(@"%s", error);
+	}
+
+	if (track){
+		Item *t = [[Item alloc]initWithTrack:track token:self.token];
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			// Update your UI
+			[self.loadedData addObject:t];
+			[self filterData];
+			[self.spinner stopAnimating];
+			[self.refreshControl endRefreshing];
+		});
+	}
+	return 0;
 }
 
 //hide searchbar by default
@@ -149,13 +128,16 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	self.spinner.center = CGPointMake(rect.size.width/2, rect.size.height/2);
 	if (!self.refreshControl.refreshing)
 		[self.spinner startAnimating];
-	
-	dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0ul);
-	dispatch_async(queue, ^{
-		[self.loadedData removeAllObjects];
+
+	[self.syncData cancelAllOperations];
+	[self.loadedData removeAllObjects];
+	[self.syncData addOperationWithBlock:^{
 		c_yandex_music_get_favorites(
-				[token UTF8String], "100x100", uid, (__bridge void *)self, get_favorites);
-	});
+				[token UTF8String], 
+				"100x100", uid, 
+				(__bridge void *)self, 
+				get_favorites);
+	}];	
 }
 
 -(void)refresh:(id)sender{
@@ -188,26 +170,19 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	[cell.detailTextLabel setText:item.subtitle];	
 	if (item.coverImage)
 		[cell.imageView setImage:item.coverImage];
-		return cell;
+	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	self.selected = [self.data objectAtIndex:indexPath.item];
-	[self.URLsync cancelAllOperations];
-	
-	NSString *token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
-	if (token){
-		UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-		UIActivityIndicatorView *spinner = 
-			(UIActivityIndicatorView*)cell.accessoryView;
+	UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+		UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
 		[spinner startAnimating];
-		self.cellSpinner = spinner;
-		[self.URLsync addOperationWithBlock:^{
-				c_yandex_music_get_download_url(
-						[token UTF8String], [self.selected.itemId UTF8String], 
-						(__bridge void *)self, get_url);
+		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected onDone:^{
+			[spinner stopAnimating];
 		}];
-	}
+		[as showInView:tableView];
+	
 	// unselect row
 	[tableView deselectRowAtIndexPath:indexPath animated:true];
 }

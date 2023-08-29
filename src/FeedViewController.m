@@ -2,99 +2,27 @@
  * File              : FeedViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 27.08.2023
+ * Last Modified Date: 29.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "FeedViewController.h"
 #import "TrackListViewController.h"
+#import "PlayerViewController.h"
 #include "Item.h"
 #include "UIKit/UIKit.h"
-#import "QuickLookController.h"
 #include "Foundation/Foundation.h"
 #import "YandexConnect.h"
 #import "YandexConnect.h"
+#import "ActionSheet.h"
 #import "../cYandexMusic/cYandexMusic.h"
 
 @implementation FeedViewController
--(void)showError:(NSString *)msg{
-	UIAlertView *alert = 
-			[[UIAlertView alloc]initWithTitle:@"error" 
-			message:msg 
-			delegate:nil 
-			cancelButtonTitle:@"Закрыть" 
-			otherButtonTitles:nil];
-	[alert show];
-}
-
-static int get_url(void *data, const char *url_str, const char *error){
-	FeedViewController *self = (__bridge FeedViewController *)data;
-	if (error)
-		[self showError:[NSString stringWithUTF8String:error]];
-	if (url_str){
-		NSURL *url = [NSURL URLWithString:[NSString stringWithUTF8String:url_str]];
-		QuickLookController *qc = 
-				[[QuickLookController alloc]initQLPreviewControllerWithURL:url 
-						title:self.selected.title trackId:self.selected.itemId];
-		[self presentViewController:qc 
-											 animated:TRUE completion:nil];
-		//[self.navigationController pushViewController:qc animated:true];
-		return 1;
-	}
-	return 0;
-}
-
-static int get_feed(void *data, playlist_t *playlist,  track_t *track, const char *error)
-{ 
-	FeedViewController *self = (__bridge FeedViewController *)data;
-	if (error)
-		[self showError:[NSString stringWithUTF8String:error]];
-
-	if (track){
-		Item *t = [[Item alloc]initWithTrack:track];
-		dispatch_sync(dispatch_get_main_queue(), ^{
-			// Update your UI
-			[self.loadedData addObject:t];
-			[self filterData];
-			[self.spinner stopAnimating];
-			[self.refreshControl endRefreshing];
-		});
-	}
-	if (playlist){
-		Item *t = [[Item alloc]initWithPlaylist:playlist];
-		dispatch_sync(dispatch_get_main_queue(), ^{
-			// Update your UI
-			[self.loadedData addObject:t];
-			[self filterData];
-			[self.spinner stopAnimating];
-			[self.refreshControl endRefreshing];
-		});
-	}
-	return 0;
-}
-
-static int get_tracks(void *data, track_t *track, const char *error)
-{ 
-	TrackListViewController *tvc = (__bridge TrackListViewController *)data;
-	if (error){
-		dispatch_sync(dispatch_get_main_queue(), ^{
-				[tvc showError:[NSString stringWithUTF8String:error]];
-		});
-	}
-
-	if (track){
-		Item *t = [[Item alloc]initWithTrack:track];
-		dispatch_sync(dispatch_get_main_queue(), ^{
-			// Update your UI
-			[tvc.loadedData addObject:t];
-			[tvc filterData];
-			[tvc.spinner stopAnimating];
-			[tvc.refreshControl endRefreshing];
-		});
-	}
-	return 0;
-}
 - (void)viewDidLoad {
-	[self setTitle:@"Популярные"];	
+	[self setTitle:@"Подборка"];	
+	self.appDelegate = [[UIApplication sharedApplication]delegate];
+	
+	self.syncData = [[NSOperationQueue alloc]init];
+	self.syncTracks = [[NSOperationQueue alloc]init];
 	// allocate array
 	self.loadedData = [NSMutableArray array];
 	self.data = [NSArray array];
@@ -109,6 +37,7 @@ static int get_tracks(void *data, track_t *track, const char *error)
 		[self presentViewController:yc 
 											 animated:TRUE completion:nil];
 	}
+	self.token = token;
 	
 	// search bar
 	self.searchBar = 
@@ -117,9 +46,6 @@ static int get_tracks(void *data, track_t *track, const char *error)
 	self.searchBar.delegate = self;
 	self.searchBar.placeholder = @"Поиск:";
 
-	// editing style
-	self.tableView.allowsMultipleSelectionDuringEditing = false;
-	
 	// refresh control
 	self.refreshControl=
 		[[UIRefreshControl alloc]init];
@@ -132,6 +58,13 @@ static int get_tracks(void *data, track_t *track, const char *error)
 		initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
 	[self.tableView addSubview:self.spinner];
 	self.spinner.tag = 12;
+
+	// play button
+	UIBarButtonItem *playButtonItem = 
+		[[UIBarButtonItem alloc]
+				initWithBarButtonSystemItem:UIBarButtonSystemItemPlay 
+				target:self.appDelegate action:@selector(playButtonPushed:)]; 
+	self.navigationItem.rightBarButtonItem = playButtonItem;
 
 	// load data
 	[self reloadData];
@@ -167,15 +100,69 @@ static int get_tracks(void *data, track_t *track, const char *error)
 	if (!self.refreshControl.refreshing)
 		[self.spinner startAnimating];
 	
-	dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0ul);
-	dispatch_async(queue, ^{
-		[self.loadedData removeAllObjects];
-		c_yandex_music_get_feed([token UTF8String], "100x100", (__bridge void *)self, get_feed);
-	});
+	[self.syncData cancelAllOperations];
+	[self.loadedData removeAllObjects];
+	[self.syncData addOperationWithBlock:^{
+		c_yandex_music_get_feed(
+				[token UTF8String], 
+				"100x100", 
+				(__bridge void *)self, 
+				get_feed);
+	}];
 }
 
 -(void)refresh:(id)sender{
 	[self reloadData];
+}
+
+static int get_feed(void *data, playlist_t *playlist,  track_t *track, const char *error)
+{ 
+	FeedViewController *self = (__bridge FeedViewController *)data;
+	if (error){
+		NSLog(@"%s", error);
+	}
+
+	if (track){
+		Item *t = [[Item alloc]initWithTrack:track token:self.token];
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			// Update your UI
+			[self.loadedData addObject:t];
+			[self filterData];
+			[self.spinner stopAnimating];
+			[self.refreshControl endRefreshing];
+		});
+	}
+	if (playlist){
+		Item *t = [[Item alloc]initWithPlaylist:playlist token:self.token];
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			// Update your UI
+			[self.loadedData addObject:t];
+			[self filterData];
+			[self.spinner stopAnimating];
+			[self.refreshControl endRefreshing];
+		});
+	}
+	return 0;
+}
+
+static int get_tracks(void *data, track_t *track, const char *error)
+{ 
+	TrackListViewController *tvc = (__bridge TrackListViewController *)data;
+	if (error){
+		NSLog(@"%s", error);
+	}
+
+	if (track){
+		Item *t = [[Item alloc]initWithTrack:track token:tvc.token];
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			// Update your UI
+			[tvc.loadedData addObject:t];
+			[tvc filterData];
+			[tvc.spinner stopAnimating];
+			[tvc.refreshControl endRefreshing];
+		});
+	}
+	return 0;
 }
 
 #pragma mark <TableViewDelegate Meythods>
@@ -206,6 +193,9 @@ static int get_tracks(void *data, track_t *track, const char *error)
 			initWithStyle: UITableViewCellStyleSubtitle 
 			reuseIdentifier: @"cell"];
 		}
+		cell.accessoryView = 
+			[[UIActivityIndicatorView alloc] 
+			initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
 	}
 	item.imageView = cell.imageView;
 	[cell.textLabel setText:item.title];
@@ -218,28 +208,32 @@ static int get_tracks(void *data, track_t *track, const char *error)
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	self.selected = [self.data objectAtIndex:indexPath.item];
 
-	if (self.selected.itemType == ITEM_TRACK){
-		NSString *token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
-		if (token){
-			c_yandex_music_get_download_url(
-					[token UTF8String], [self.selected.itemId UTF8String], 
-					(__bridge void *)self, get_url);
-		}
+	if (self.selected.itemType == ITEM_TRACK ||
+			self.selected.itemType == ITEM_PODCAST_EPOSODE)
+	{
+		UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+		UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
+		[spinner startAnimating];
+		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected onDone:^{
+			[spinner stopAnimating];
+		}];
+		[as showInView:tableView];
 	}
-	else if (self.selected.itemType == ITEM_PLAYLIST){
+	else if (self.selected.itemType == ITEM_PLAYLIST)
+	{
 		NSString *token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
 		if (token){	
 			TrackListViewController *vc = [[TrackListViewController alloc]initWithTitle:
 																			self.selected.title];
 
-			dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0ul);
-				dispatch_async(queue, ^{
+			[self.syncTracks cancelAllOperations];
+			[self.syncTracks addOperationWithBlock:^{
 					c_yandex_music_get_playlist_tracks(
 							[token UTF8String], "100x100",
 							self.selected.uid, self.selected.kind,	
 							(__bridge void *)vc, get_tracks);
-				});
-				[self.navigationController pushViewController:vc animated:true];
+				}];
+			[self.navigationController pushViewController:vc animated:true];
 		}
 	}
 	// unselect row
