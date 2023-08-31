@@ -2,7 +2,7 @@
  * File              : Item.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 24.08.2023
- * Last Modified Date: 29.08.2023
+ * Last Modified Date: 31.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "Item.h"
@@ -18,9 +18,11 @@
 	if (self = [super init]) {
 		self.coverImage = NULL;
 		[self setItemId:@"undefined"];
-		self.subtitle = [[NSString alloc]initWithString:@""];
+		self.subtitle = @"";
+		self.albumTitle = @"";
 		self.hasAtrImage = NO;
 		self.hasDownloadURL = false;
+		self.albumId = 0;
 	}
 	return self;
 }
@@ -30,14 +32,20 @@
 		if (track->realId)
 			[self setItemId:
 				[NSString stringWithUTF8String:track->realId]];
+		else
+			[self setItemId:
+				[NSString stringWithUTF8String:track->id]];
+
 		if (track->type)
 		{
 			if (strcmp(track->type, "track") == 0)
 				self.itemType = ITEM_TRACK;
-			else if (strcmp(track->type, "podcast_episode") == 0)
+			else if (strcmp(track->type, "podcast-episode") == 0)
 				self.itemType = ITEM_PODCAST_EPOSODE;
 			else if (strcmp(track->type, "podcast") == 0)
 				self.itemType = ITEM_PODCAST;
+			else if (strcmp(track->type, "album") == 0)
+				self.itemType = ITEM_ALBUM;
 		}
 		if (track->title)
 			[self setTitle:[NSString stringWithUTF8String:track->title]];
@@ -60,6 +68,12 @@
 			}
 			self.subtitle = [NSString stringWithUTF8String:artists];
 		}
+		if (track->albums){
+			if (track->albums[0].title){
+				self.albumTitle = [NSString stringWithUTF8String:track->albums[0].title];
+			}
+				self.albumId = track->albums[0].id;
+		}
 	}
 
 	return self;
@@ -77,6 +91,42 @@
 			self.subtitle = [NSString stringWithUTF8String:playlist->description]; 
 		if (playlist->ogImage){
 			self.coverUri = [NSURL URLWithString:[NSString stringWithUTF8String:playlist->ogImage]];
+			// Update your UI
+			[self downloadSmallImage];
+		}
+	}
+
+	return self;
+}
+
+-(id)initWithAlbum:(album_t *)album token:(NSString *)token{
+	if (self = [self init]){
+		[self setItemId:
+			[NSString stringWithUTF8String:album->realId]];
+		self.token = token;
+		self.itemType = ITEM_ALBUM;
+		self.subtitle = @"";
+		if (strcmp(album->type, "podcast") == 0)
+			self.itemType = ITEM_PODCAST;
+		if (album->title)
+			self.title = [NSString stringWithUTF8String:album->title]; 
+		if (album->artists){
+			int i;
+			char artists[BUFSIZ] = "";
+			for (i=0;i<album->n_artists;i++){
+				artist_t artist = album->artists[i];
+				char *name = artist.name;
+				if (name){
+					strcat(artists, name);
+					if (i != album->n_artists - 1)
+						strcat(artists, ", ");
+				}
+			}
+			self.subtitle = [NSString stringWithUTF8String:artists];
+		}
+
+		if (album->coverUri){
+			self.coverUri = [NSURL URLWithString:[NSString stringWithUTF8String:album->coverUri]];
 			// Update your UI
 			[self downloadSmallImage];
 		}
@@ -115,11 +165,12 @@ static int get_track_with_image(void *data, track_t *track, const char *error){
 		return 0;
 	}
 	if (track){
-		Item *t = [[Item alloc]initWithTrack:track token:self.token];
+			NSURL *url = [NSURL URLWithString:[NSString stringWithUTF8String:track->coverUri]]; 
+			NSData *data = [NSData dataWithContentsOfURL:url];
+			// save image to cache
+			[data writeToFile:self.artImageURL.path atomically:true];
 		dispatch_sync(dispatch_get_main_queue(), ^{
-				self.artImage = t.coverImage;
-				// save image to cache
-				[UIImagePNGRepresentation(self.artImage) writeToURL:self.artImageURL atomically:true];
+				self.artImage = [UIImage imageWithData:data];
 				self.hasAtrImage = YES;
 				if (self.onImageReady)
 					self.onImageReady(self);

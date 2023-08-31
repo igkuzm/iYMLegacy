@@ -2,7 +2,7 @@
  * File              : FavoritesViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 29.08.2023
+ * Last Modified Date: 31.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "FavoritesViewController.h"
@@ -19,29 +19,39 @@
 
 @implementation FavoritesViewController
 
+- (id)init
+{
+	if (self = [super init]) {
+		self.appDelegate = [[UIApplication sharedApplication]delegate];
+	
+		self.syncData = [[NSOperationQueue alloc]init];
+		// allocate array
+		self.loadedData = self.appDelegate.likedTracks;
+		self.data = [NSArray array];
+		
+		// check token
+		NSString *token = 
+			[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
+		self.token = token;
+		// get uid
+		NSInteger uid = 
+			[[NSUserDefaults standardUserDefaults]integerForKey:@"uid"];
+		if (!uid){
+			if (token)
+				uid = c_yandex_music_get_uid([token UTF8String]);
+			if (uid)
+				[[NSUserDefaults standardUserDefaults]setInteger:uid forKey:@"uid"];
+		}
+		
+		[self setViewIsLoaded:NO];
+		[self reloadData];
+	}
+	return self;
+}
+
 - (void)viewDidLoad {
 	[self setTitle:@"Избранное"];	
-	self.appDelegate = [[UIApplication sharedApplication]delegate];
 	
-	self.syncData = [[NSOperationQueue alloc]init];
-	// allocate array
-	self.loadedData = [NSMutableArray array];
-	self.data = [NSArray array];
-	
-	// check token
-	NSString *token = 
-		[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
-	self.token = token;
-	// get uid
-	NSInteger uid = 
-		[[NSUserDefaults standardUserDefaults]integerForKey:@"uid"];
-	if (!uid){
-		if (token)
-			uid = c_yandex_music_get_uid([token UTF8String]);
-		if (uid)
-			[[NSUserDefaults standardUserDefaults]setInteger:uid forKey:@"uid"];
-	}
-
 	// search bar
 	self.searchBar = 
 		[[UISearchBar alloc] initWithFrame:CGRectMake(0,70,320,44)];
@@ -63,14 +73,13 @@
 	self.spinner.tag = 12;
 
 	// play button
-	UIBarButtonItem *playButtonItem = 
-		[[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemPlay 
-				target:self.appDelegate action:@selector(playButtonPushed:)]; 
-	self.navigationItem.rightBarButtonItem = playButtonItem;
+	//UIBarButtonItem *playButtonItem = 
+		//[[UIBarButtonItem alloc]
+				//initWithBarButtonSystemItem:UIBarButtonSystemItemPlay 
+				//target:self.appDelegate action:@selector(playButtonPushed:)]; 
+	//self.navigationItem.rightBarButtonItem = playButtonItem;
 
-	// load data
-	[self reloadData];
+	[self setViewIsLoaded:YES];
 }
 
 static int get_favorites(void *data, track_t *track, const char *error)
@@ -85,9 +94,11 @@ static int get_favorites(void *data, track_t *track, const char *error)
 		dispatch_sync(dispatch_get_main_queue(), ^{
 			// Update your UI
 			[self.loadedData addObject:t];
-			[self filterData];
-			[self.spinner stopAnimating];
-			[self.refreshControl endRefreshing];
+			if (self.viewIsLoaded){
+				[self filterData];
+				[self.spinner stopAnimating];
+				[self.refreshControl endRefreshing];
+			}
 		});
 	}
 	return 0;
@@ -106,13 +117,17 @@ static int get_favorites(void *data, track_t *track, const char *error)
 -(void)filterData{
 	if (self.searchBar.text && self.searchBar.text.length > 0)
 		self.data = [self.loadedData filteredArrayUsingPredicate:
-				[NSPredicate predicateWithFormat:@"self.title contains[c] %@", self.searchBar.text]];
+				//[NSPredicate predicateWithFormat:@"self.title contains[c] %@", self.searchBar.text]];
+				[NSPredicate predicateWithFormat:@"self.title contains[c] %@ or self.subtitle contains[c] %s", self.searchBar.text, self.searchBar.text]];
 	else
 		self.data = self.loadedData;
 	[self.tableView reloadData];
 }
 
 -(void)reloadData{
+	// stop all sync
+	[self.syncData cancelAllOperations];
+	
 	NSString *token = 
 		[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
 	if (!token)
@@ -129,8 +144,8 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	if (!self.refreshControl.refreshing)
 		[self.spinner startAnimating];
 
-	[self.syncData cancelAllOperations];
 	[self.loadedData removeAllObjects];
+	[self.tableView reloadData];
 	[self.syncData addOperationWithBlock:^{
 		c_yandex_music_get_favorites(
 				[token UTF8String], 
@@ -178,7 +193,7 @@ static int get_favorites(void *data, track_t *track, const char *error)
 	UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
 		UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
 		[spinner startAnimating];
-		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected onDone:^{
+		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:NO onDone:^{
 			[spinner stopAnimating];
 		}];
 		[as showInView:tableView];

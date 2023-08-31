@@ -1,42 +1,29 @@
 /**
- * File              : FeedViewController.m
+ * File              : PlaylistsViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
  * Last Modified Date: 30.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
-#import "FeedViewController.h"
+#import "PlaylistsViewController.h"
 #import "TrackListViewController.h"
 #import "PlayerViewController.h"
 #include "Item.h"
 #include "UIKit/UIKit.h"
 #include "Foundation/Foundation.h"
 #import "YandexConnect.h"
-#import "YandexConnect.h"
-#import "ActionSheet.h"
 #import "../cYandexMusic/cYandexMusic.h"
+#import "ActionSheet.h"
 
-@implementation FeedViewController
+@implementation PlaylistsViewController
+
 - (void)viewDidLoad {
-	[self setTitle:@"Подборка"];	
+	self.title = @"Плейлисты";
 	self.appDelegate = [[UIApplication sharedApplication]delegate];
-	
 	self.syncData = [[NSOperationQueue alloc]init];
-	// allocate array
 	self.loadedData = [NSMutableArray array];
 	self.data = [NSArray array];
-	
-	// check token
-	NSString *token = 
-		[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
-	if (!token){
-		// start Yandex Connect
-		YandexConnect *yc = 
-			[[YandexConnect alloc]initWithFrame:[[UIScreen mainScreen] bounds]];
-		[self presentViewController:yc 
-											 animated:TRUE completion:nil];
-	}
-	self.token = token;
+	self.token = [[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
 	
 	// search bar
 	self.searchBar = 
@@ -51,13 +38,6 @@
 	[self.refreshControl setAttributedTitle:[[NSAttributedString alloc] initWithString:@""]];
 	[self.refreshControl addTarget:self action:@selector(refresh:) forControlEvents:UIControlEventValueChanged];
 
-	//spinner
-	self.spinner = 
-		[[UIActivityIndicatorView alloc] 
-		initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
-	[self.tableView addSubview:self.spinner];
-	self.spinner.tag = 12;
-
 	// play button
 	//UIBarButtonItem *playButtonItem = 
 		//[[UIBarButtonItem alloc]
@@ -65,8 +45,21 @@
 				//target:self.appDelegate action:@selector(playButtonPushed:)]; 
 	//self.navigationItem.rightBarButtonItem = playButtonItem;
 
+	// edit button
+	self.navigationItem.rightBarButtonItem = self.editButtonItem;
+	
 	// load data
 	[self reloadData];
+}
+
+-(void)editing:(BOOL)editing{
+	[self setEditing:editing];
+	if (self.editing){
+
+		[self.navigationItem setHidesBackButton:YES animated:YES];
+	}
+	else
+		[self.navigationItem setHidesBackButton:NO animated:YES];
 }
 
 //hide searchbar by default
@@ -82,57 +75,59 @@
 -(void)filterData{
 	if (self.searchBar.text && self.searchBar.text.length > 0)
 		self.data = [self.loadedData filteredArrayUsingPredicate:
-				//[NSPredicate predicateWithFormat:@"self.title contains[c] %@", self.searchBar.text]];
-				[NSPredicate predicateWithFormat:@"self.title contains[c] %@ or self.subtitle contains[c] %s", self.searchBar.text, self.searchBar.text]];
+				[NSPredicate predicateWithFormat:@"self.title contains[c] %@", self.searchBar.text]];
 	else
 		self.data = self.loadedData;
 	[self.tableView reloadData];
 }
 
 -(void)reloadData{
+	// stop all sync
+	[self.syncData cancelAllOperations];
+	
 	NSString *token = 
 		[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
 	if (!token)
 		return;
+
+	// get uid
+	NSInteger uid = 
+		[[NSUserDefaults standardUserDefaults]integerForKey:@"uid"];
+	if (!uid){
+		if (token)
+			uid = c_yandex_music_get_uid([token UTF8String]);
+		if (uid)
+			[[NSUserDefaults standardUserDefaults]setInteger:uid forKey:@"uid"];
+	}
+	
 	// animate spinner
 	CGRect rect = self.view.bounds;
 	self.spinner.center = CGPointMake(rect.size.width/2, rect.size.height/2);
 	if (!self.refreshControl.refreshing)
 		[self.spinner startAnimating];
-	
-	[self.syncData cancelAllOperations];
+
 	[self.loadedData removeAllObjects];
 	[self.tableView reloadData];
 	[self.syncData addOperationWithBlock:^{
-		c_yandex_music_get_feed(
+		c_yandex_music_get_user_playlists(
 				[token UTF8String], 
-				"100x100", 
+				"100x100", uid, 
 				(__bridge void *)self, 
-				get_feed);
-	}];
+				get_user_playlists);
+	}];	
 }
 
 -(void)refresh:(id)sender{
 	[self reloadData];
 }
 
-static int get_feed(void *data, playlist_t *playlist,  track_t *track, const char *error)
+static int get_user_playlists(void *data, playlist_t *playlist, const char *error)
 { 
-	FeedViewController *self = (__bridge FeedViewController *)data;
+	PlaylistsViewController *self = (__bridge PlaylistsViewController *)data;
 	if (error){
 		NSLog(@"%s", error);
 	}
 
-	if (track){
-		Item *t = [[Item alloc]initWithTrack:track token:self.token];
-		dispatch_sync(dispatch_get_main_queue(), ^{
-			// Update your UI
-			[self.loadedData addObject:t];
-			[self filterData];
-			[self.spinner stopAnimating];
-			[self.refreshControl endRefreshing];
-		});
-	}
 	if (playlist){
 		Item *t = [[Item alloc]initWithPlaylist:playlist token:self.token];
 		dispatch_sync(dispatch_get_main_queue(), ^{
@@ -146,6 +141,7 @@ static int get_feed(void *data, playlist_t *playlist,  track_t *track, const cha
 	return 0;
 }
 
+
 #pragma mark <TableViewDelegate Meythods>
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
 	return 1;
@@ -158,7 +154,8 @@ static int get_feed(void *data, playlist_t *playlist,  track_t *track, const cha
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 	Item *item = [self.data objectAtIndex:indexPath.item];
 	UITableViewCell *cell = nil;
-	if (item.itemType == ITEM_PLAYLIST){
+	cell = [self.tableView dequeueReusableCellWithIdentifier:@"cell"];
+	if (cell == nil){
 		cell = [self.tableView dequeueReusableCellWithIdentifier:@"dir"];
 		if (cell == nil){
 			cell = [[UITableViewCell alloc]
@@ -167,54 +164,27 @@ static int get_feed(void *data, playlist_t *playlist,  track_t *track, const cha
 		}
 		cell.accessoryType = UITableViewCellAccessoryDetailDisclosureButton;
 	}
-	else{
-		cell = [self.tableView dequeueReusableCellWithIdentifier:@"cell"];
-		if (cell == nil){
-			cell = [[UITableViewCell alloc]
-			initWithStyle: UITableViewCellStyleSubtitle 
-			reuseIdentifier: @"cell"];
-		}
-	}
 	item.imageView = cell.imageView;
 	[cell.textLabel setText:item.title];
 	[cell.detailTextLabel setText:item.subtitle];	
 	if (item.coverImage)
 		[cell.imageView setImage:item.coverImage];
+	
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+	
 	self.selected = [self.data objectAtIndex:indexPath.item];
-
-	if (self.selected.itemType == ITEM_TRACK ||
-			self.selected.itemType == ITEM_PODCAST_EPOSODE)
-	{
-		UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-		UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
-		[spinner startAnimating];
-		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:NO onDone:^{
-			[spinner stopAnimating];
-		}];
-		[as showInView:tableView];
-	}
-	else if (self.selected.itemType == ITEM_PLAYLIST ||
-					 self.selected.itemType == ITEM_PODCAST  ||
-					 self.selected.itemType == ITEM_ALBUM)
-	{
-			TrackListViewController *vc = [[TrackListViewController alloc]initWithParent:
-																			self.selected];
-			[self.navigationController pushViewController:vc animated:true];
-	}
-	// unselect row
+	TrackListViewController *vc = [[TrackListViewController alloc]initWithParent:self.selected];
+	[self.navigationController pushViewController:vc animated:true];
+		
+		// unselect row
 	[tableView deselectRowAtIndexPath:indexPath animated:true];
-}
-- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
-	// hide keyboard
-	[self.searchBar resignFirstResponder];
 }
 
 - (void)tableView:(UITableView *)tableView accessoryButtonTappedForRowWithIndexPath:(NSIndexPath *)indexPath {
-	self.selected = [self.data objectAtIndex:indexPath.item];
+					 self.selected = [self.data objectAtIndex:indexPath.item];
 	UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
 	UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
 	[spinner startAnimating];
@@ -224,6 +194,27 @@ static int get_feed(void *data, playlist_t *playlist,  track_t *track, const cha
 	[as showInView:tableView];
 }
 
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+	return true;
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (editingStyle == UITableViewCellEditingStyleDelete){
+		self.selected = [self.data objectAtIndex:indexPath.item];
+			UIAlertView *alert = 
+				[[UIAlertView alloc]initWithTitle:@"Удалить плейлист?" 
+				message:self.selected.title 
+				delegate:self 
+				cancelButtonTitle:@"Отмена" 
+				otherButtonTitles:@"Удалить", nil];
+			[alert show];
+	}
+}
+
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+	// hide keyboard
+	[self.searchBar resignFirstResponder];
+}
 
 #pragma mark <SEARCHBAR FUNCTIONS>
 
@@ -237,6 +228,19 @@ static int get_feed(void *data, playlist_t *playlist,  track_t *track, const cha
 }
 - (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
 	[searchBar resignFirstResponder];
+}
+
+#pragma mark <ALERT DELEGATE FUNCTIONS>
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
+	if (buttonIndex == 1){
+		c_yandex_music_remove_playlist(
+				[self.token UTF8String], 
+				self.selected.uid, 
+				self.selected.kind, 
+				NULL, NULL);
+		[self.loadedData removeObject:self.selected];
+		[self filterData];
+	}
 }
 @end
 // vim:ft=objc

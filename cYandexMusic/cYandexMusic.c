@@ -2,7 +2,7 @@
  * File              : cYandexMusic.c
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 29.08.2023
+ * Last Modified Date: 31.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -11,11 +11,13 @@
 #include <string.h>
 #include <stdarg.h>
 #include <curl/curl.h>
+#include <time.h>
 #include "cYandexMusic.h"
 #include "cJSON.h"
 #include "structures.h"
 #include "ezxml.h"
 #include "md5.h"
+#include "uuid4.h"
 
 //add strptime for winapi
 #ifdef _WIN32
@@ -125,7 +127,8 @@ int c_yandex_music_run_method(
 
 		struct curl_slist *header = NULL;
 	    header = curl_slist_append(header, "Connection: close");		
-	    header = curl_slist_append(header, "Content-Type: application/json");
+			//header = curl_slist_append(header, "Content-Type: application/json");
+			header = curl_slist_append(header, "Content-Type: application/x-www-form-urlencoded");
 	    header = curl_slist_append(header, "Accept: application/json");
 	    header = curl_slist_append(header, authorization);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header);
@@ -337,6 +340,8 @@ static void c_yandex_music_get_download_url_cb(
 		if (json){
 			cJSON *item;
 			for (item = json->child; item; item = item->next) {
+			//cJSON *item = json->child;
+			//if (item){
 				// ok! we have download info
 				struct downloadInfo downloadInfo;
 				init_downloadInfo(&downloadInfo, item);
@@ -371,6 +376,7 @@ static void c_yandex_music_get_download_url_cb(
 						curl_easy_cleanup(curl);
 						curl_slist_free_all(header);
 						continue;;			
+						//return;
 					}		
 					curl_easy_cleanup(curl);
 					curl_slist_free_all(header);
@@ -382,6 +388,7 @@ static void c_yandex_music_get_download_url_cb(
 					long start = strfnd(downloadInfo.downloadInfoUrl, pattern); 
 					if (start < 0)
 						continue;
+						//return;
 					long end = strfnd(&(downloadInfo.downloadInfoUrl[start]), "&");
 					long clen = end - len;
 					strncpy(sign, &(downloadInfo.downloadInfoUrl[start + len]), clen);
@@ -413,6 +420,7 @@ static void c_yandex_music_get_download_url_cb(
 						if (d->callback)
 							if (d->callback(d->user_data, url, NULL))
 								break;
+								//return;
 					}
 					free(s.ptr);
 				}	
@@ -445,7 +453,7 @@ int c_yandex_music_get_download_url(
 
 struct c_yandex_music_search_data {
 	void *user_data; 
-	int (*callback)(void *, playlist_t *, track_t *, const char *);
+	int (*callback)(void *, playlist_t *, album_t *, track_t *, const char *);
 	const char *token;
 	const char *image_size;	 // NULL - for original
 };
@@ -455,11 +463,11 @@ static void c_yandex_music_search_cb(
 	struct c_yandex_music_search_data *d = data;
 	if (error)
 		if (d->callback)
-			d->callback(d->user_data, NULL, NULL, error);
+			d->callback(d->user_data, NULL, NULL, NULL, error);
 	if (str){
 		cJSON *json = cJSON_Parse(str);
 		if (json){
-			//d->callback(d->user_data, NULL, NULL, cJSON_Print(json));
+			//d->callback(d->user_data, NULL, NULL, NULL, cJSON_Print(json));
 			//return;
 			cJSON *best = cJSON_GetObjectItem(json, "best");
 			if (best){
@@ -495,7 +503,7 @@ static void c_yandex_music_search_cb(
 							p->ogImage = strdup(str);
 						}
 						if (d->callback){
-							d->callback(d->user_data, NULL, p, NULL);
+							d->callback(d->user_data, NULL, NULL, p, NULL);
 						}
 					}
 				}
@@ -532,7 +540,79 @@ static void c_yandex_music_search_cb(
 							p->ogImage = strdup(str);
 						}
 						if (d->callback){
-							if (d->callback(d->user_data, NULL, p, NULL))
+							if (d->callback(d->user_data, NULL, NULL, p, NULL))
+								break;
+						}
+					}
+				}
+			}
+			cJSON *albums = cJSON_GetObjectItem(json, "albums");
+			if (albums){
+				cJSON *results = cJSON_GetObjectItem(albums, "results");
+				cJSON *album;
+				for (album=results->child; album; album = album->next){
+					album_t *p = c_yandex_music_album_new_from_json(album);
+					if (p){
+						//fix uris
+						const char *size = "orig";
+						if (d->image_size)
+							size = d->image_size;
+						if (p->coverUri){
+							char str[BUFSIZ];
+							int i = lastpath(p->coverUri);
+							p->coverUri[i] = 0;
+							sprintf(str, "https://%s/%s", p->coverUri, size);
+							free(p->coverUri);
+							p->coverUri = strdup(str);
+						}	
+						if (p->ogImage){
+							char str[BUFSIZ];
+							int i = lastpath(p->ogImage);
+							p->ogImage[i] = 0;
+							sprintf(str, "https://%s/orig", p->ogImage);
+							free(p->ogImage);
+							p->ogImage = strdup(str);
+						}
+						if (d->callback){
+							 if (d->callback(d->user_data, NULL, p, NULL, NULL))
+								break;
+						}
+					}
+				}
+			}
+			cJSON *podcasts = cJSON_GetObjectItem(json, "podcasts");
+			if (podcasts){
+				cJSON *results = cJSON_GetObjectItem(podcasts, "results");
+				cJSON *album;
+				for (album=results->child; album; album = album->next){
+					album_t *p = c_yandex_music_album_new_from_json(album);
+					if (p){
+						// set type
+						/*if (p->type)*/
+							/*free(p->type);*/
+						p->type = strdup("podcast");
+						//fix uris
+						const char *size = "orig";
+						if (d->image_size)
+							size = d->image_size;
+						if (p->coverUri){
+							char str[BUFSIZ];
+							int i = lastpath(p->coverUri);
+							p->coverUri[i] = 0;
+							sprintf(str, "https://%s/%s", p->coverUri, size);
+							free(p->coverUri);
+							p->coverUri = strdup(str);
+						}	
+						if (p->ogImage){
+							char str[BUFSIZ];
+							int i = lastpath(p->ogImage);
+							p->ogImage[i] = 0;
+							sprintf(str, "https://%s/orig", p->ogImage);
+							free(p->ogImage);
+							p->ogImage = strdup(str);
+						}
+						if (d->callback){
+							if (d->callback(d->user_data, NULL, p, NULL, NULL))
 								break;
 						}
 					}
@@ -570,7 +650,7 @@ static void c_yandex_music_search_cb(
 							p->ogImage = strdup(str);
 						}
 						if (d->callback){
-							if (d->callback(d->user_data, NULL, p, NULL))
+							if (d->callback(d->user_data, NULL, NULL, p, NULL))
 								break;
 						}
 					}
@@ -596,7 +676,7 @@ static void c_yandex_music_search_cb(
 							p->ogImage = strdup(str);
 						}
 						if (d->callback){
-							if (d->callback(d->user_data, p, NULL, NULL))
+							if (d->callback(d->user_data, p, NULL, NULL, NULL))
 								break;
 						}
 					}
@@ -615,9 +695,11 @@ int c_yandex_music_search(
 		int (*callback)
 				(void *user_data,
 				 playlist_t * playlist,
+				 album_t * album,
 				 track_t *track,
 				 const char *error))
 {
+	int ret = -1;
 	struct c_yandex_music_search_data d =
 		{user_data, callback, token, image_size};
 
@@ -627,13 +709,15 @@ int c_yandex_music_search(
 		if (search_str){
 			char text[BUFSIZ];
 			sprintf(text, "text=%s", search_str);
-			return c_yandex_music_run_method(
+			ret =  c_yandex_music_run_method(
 					"GET", token, NULL, &d, c_yandex_music_search_cb, 
 					"search", text, "page=0", "type=all", "nocorrect=false", NULL);
+
+			free(search_str);
 		}
 		curl_easy_cleanup(curl);
 	}
-	return -1;
+	return ret;
 }
 
 static void c_yandex_music_get_uid_cb(
@@ -913,7 +997,7 @@ int c_yandex_music_get_favorites(
 
 struct c_yandex_music_post_current_data {
 	void *user_data; 
-	int (*callback)(void *, const char *);
+	void (*callback)(void *, const char *);
 	const char *token;       
 };
 
@@ -927,26 +1011,456 @@ static void c_yandex_music_post_current_cb(
 			d->callback(d->user_data, error);
 }
 
-int c_yandex_music_post_current(
+char * c_yandex_music_post_current(
 		const char *token,       // authorization token
+		const char *uuid,
+		const char *trackId,
+		long uid,
+		void *user_data, 
+		void (*callback)         // response and error handler - NULL-able
+				(void *user_data,
+				 const char *error))
+{
+	char *uuid_str = NULL;
+	if (!uuid){
+		uuid_str = malloc(37);
+		if (!uuid_str){
+			if (callback)
+				callback(user_data, "can't allocate memory");
+			return NULL;
+		}
+		UUID4_STATE_T state; UUID4_T uuid_;
+		uuid4_seed(&state);
+		uuid4_gen(&state, &uuid_);
+		if (!uuid4_to_s(uuid_, uuid_str, 37)){
+			if (callback)
+				callback(user_data, "can't generate uuid");
+			return NULL;
+		}
+		uuid = uuid_str;
+	}
+
+	struct c_yandex_music_post_current_data d = 
+		{user_data, callback, token};
+
+	time_t t = time(NULL);
+	struct tm *tp = gmtime(&t);
+	char date[128] = "";
+	//strftime(date, 128, "%Y-%m-%dT%H:%M:%SZ", tp);
+	sprintf(date, "%04d-%02d-%02dT%02d%%3A%02d%%3A%02d.000Z", 
+			tp->tm_year + 1900, tp->tm_mon + 1, tp->tm_mday,
+			tp->tm_hour, tp->tm_min, tp->tm_sec);
+
+			char body[BUFSIZ] = "";
+			sprintf(body, 
+					"from=cYandexMusic"
+					"&uid=%ld"
+					"&track-id=%s"
+					"&play-id=%s"
+					"&client-now=%s"
+					 "&timestamp=%s",
+					uid, trackId, uuid, date, date);
+		
+		if (c_yandex_music_run_method(
+					"POST", token, body, &d, 
+					c_yandex_music_post_current_cb, "play-audio", NULL))
+		{
+			if (uuid_str)
+				free(uuid_str);
+			return NULL;
+		}
+		return uuid_str;
+}
+	
+struct c_yandex_music_get_album_tracks_data {
+	void *user_data; 
+	int (*callback)(void *, track_t *, const char *);
+	const char *image_size; 
+};
+static void c_yandex_music_get_album_tracks_cb(
+		void *data, const char *str, const char *error)
+{
+	struct c_yandex_music_get_album_tracks_data *d = data;
+	
+	const char *size = "orig";
+	if (d->image_size)
+		size = d->image_size;
+
+	if (error)
+		if (d->callback)
+			d->callback(d->user_data, NULL, error);
+	if (str){
+		cJSON *json = cJSON_Parse(str);
+		if (json){
+			//d->callback(d->user_data, NULL, cJSON_Print(json));
+			//return;
+			cJSON *volumes = cJSON_GetObjectItem(json, "volumes");
+			if (volumes){
+				cJSON *volume;
+				for (volume = volumes->child;
+						 volume;
+						 volume = volume->next)
+				{
+					cJSON *track;
+					for (track = volume->child;
+							track;
+							track = track->next)
+					{
+								track_t *p = 
+									c_yandex_music_track_new_from_json(track);
+								if (p){
+									//fix uris
+									if (p->coverUri){
+										char str[BUFSIZ];
+										int i = lastpath(p->coverUri);
+										p->coverUri[i] = 0;
+										sprintf(str, "https://%s/%s", p->coverUri, size);
+										free(p->coverUri);
+										p->coverUri = strdup(str);
+									}	
+									if (p->ogImage){
+										char str[BUFSIZ];
+										int i = lastpath(p->ogImage);
+										p->ogImage[i] = 0;
+										sprintf(str, "https://%s/%s", p->ogImage, size);
+										free(p->ogImage);
+										p->ogImage = strdup(str);
+									}
+
+									if (d->callback)
+										d->callback(d->user_data, p, NULL);
+								}
+							}
+						}
+			}
+		}
+	}
+}
+	
+int c_yandex_music_get_album_tracks(
+		const char *token,       // authorization token
+		const char *image_size,	 // NULL - for original
+		long album_id,
+		void *user_data, 
+		int (*callback)          // callback for each track
+														 // return non-zero to stop function
+				(void *user_data,
+				 track_t * track,
+				 const char *error))
+{
+	struct c_yandex_music_get_album_tracks_data d =
+			{user_data, callback, image_size};
+	
+	char method[BUFSIZ];
+	sprintf(method, "albums/%ld/with-tracks", album_id);
+	return c_yandex_music_run_method(
+			"GET", token, NULL, &d, c_yandex_music_get_album_tracks_cb, method, NULL);
+}
+
+struct c_yandex_music_get_user_playlists_data {
+	void *user_data; 
+	int (*callback)(void *, playlist_t *, const char *);
+	const char *image_size; 
+};
+static void c_yandex_music_get_user_playlists_cb(
+		void *data, const char *str, const char *error)
+{
+	struct c_yandex_music_get_user_playlists_data *d = data;
+	
+	const char *size = "orig";
+	if (d->image_size)
+		size = d->image_size;
+
+	if (error)
+		if (d->callback)
+			d->callback(d->user_data, NULL, error);
+	if (str){
+		cJSON *json = cJSON_Parse(str);
+		if (json){
+			//d->callback(d->user_data, NULL, cJSON_Print(json));
+			//return;
+			cJSON *playlist;
+			for (playlist=json->child; playlist; playlist = playlist->next){
+				playlist_t *p = c_yandex_music_playlist_new_from_json(playlist);
+				if (p){
+					//fix uris
+					const char *size = "orig";
+					if (d->image_size)
+						size = d->image_size;
+					if (p->ogImage){
+						char str[BUFSIZ];
+						int i = lastpath(p->ogImage);
+						p->ogImage[i] = 0;
+						sprintf(str, "https://%s/orig", p->ogImage);
+						free(p->ogImage);
+						p->ogImage = strdup(str);
+					}
+					if (d->callback){
+						if (d->callback(d->user_data, p, NULL))
+							break;
+					}
+				}
+			}
+		}
+	}
+}
+
+int c_yandex_music_get_user_playlists(
+		const char *token,       // authorization token
+		const char *image_size,	 // NULL - for original
+		long uid,                // user id
+		void *user_data, 
+		int (*callback)          // callback for each track
+														 // return non-zero to stop function
+				(void *user_data,
+				 playlist_t * playlist,
+				 const char *error))
+{
+	struct c_yandex_music_get_user_playlists_data d =
+			{user_data, callback, image_size};
+	
+	char method[BUFSIZ];
+	sprintf(method, "users/%ld/playlists/list", uid);
+	return c_yandex_music_run_method(
+			"GET", token, NULL, &d, c_yandex_music_get_user_playlists_cb, method, NULL);
+}
+
+struct c_yandex_music_remove_playlist_data {
+	void *user_data; 
+	void (*callback)(void *, const char *);
+	const char *token;       
+};
+
+static void c_yandex_music_remove_playlist_cb(
+		void *data, const char *str, const char *error)
+{
+	struct c_yandex_music_remove_playlist_data *d = data;
+	
+	if (error)
+		if (d->callback)
+			d->callback(d->user_data, error);
+}
+
+int c_yandex_music_remove_playlist(
+		const char *token,       // authorization token
+		long playlist_uid,
+		long playlist_kind,
+		void *user_data, 
+		void (*callback)          
+				(void *user_data,
+				 const char *error))
+{
+struct c_yandex_music_remove_playlist_data d =
+		{user_data, callback};
+	
+	char method[BUFSIZ];
+	sprintf(method, "users/%ld/playlists/%ld/delete", playlist_uid, playlist_kind);
+	return c_yandex_music_run_method(
+			"POST", token, NULL, &d, c_yandex_music_remove_playlist_cb, method, NULL);
+}
+
+struct c_yandex_music_like_current_data {
+	void *user_data; 
+	void (*callback)(void *, const char *);
+	const char *token;       
+};
+
+static void c_yandex_music_like_current_cb(
+		void *data, const char *str, const char *error)
+{
+	struct c_yandex_music_like_current_data *d = data;
+	
+	if (error)
+		if (d->callback)
+			d->callback(d->user_data, error);
+}
+
+int c_yandex_music_set_like_current(
+		const char *token,       // authorization token
+		long uid,
 		const char *trackId,
 		void *user_data, 
 		void (*callback)         // response and error handler - NULL-able
 				(void *user_data,
 				 const char *error))
 {
-	struct c_yandex_music_post_current_data d = 
+	struct c_yandex_music_like_current_data d = 
 		{user_data, callback, token};
 	
+	char method[BUFSIZ] = "";
+	sprintf(method, "users/%ld/likes/tracks/add-multiple", uid);
+	
 	char body[BUFSIZ] = "";
-	sprintf(body, 
-			"{"
-			"\"track-id\":\"%s\","
-			"\"from\":\"cYandexMusic\""
-			"}", trackId);
+	sprintf(body, "track-ids=%s", trackId);
+	//sprintf(body, "{'track-ids': [%s]}", trackId);
 	
 	return c_yandex_music_run_method(
-			"POST", token, body, &d, c_yandex_music_post_current_cb, "play-audio", NULL);
+			"POST", token, body, &d, c_yandex_music_like_current_cb, method, NULL);
+}
+	
+int c_yandex_music_set_unlike_current(
+		const char *token,       // authorization token
+		long uid,
+		const char *trackId,
+		void *user_data, 
+		void (*callback)         // response and error handler - NULL-able
+				(void *user_data,
+				 const char *error))
+{
+	struct c_yandex_music_like_current_data d = 
+		{user_data, callback, token};
+	
+	char method[BUFSIZ] = "";
+	sprintf(method, "users/%ld/likes/tracks/remove", uid);
+	
+	char body[BUFSIZ] = "";
+	sprintf(body, "track-ids=%s", trackId);
+	//sprintf(body, "{'track-ids': [%s]}", trackId);
+	
+	return c_yandex_music_run_method(
+			"POST", token, body, &d, c_yandex_music_like_current_cb, method, NULL);
+}
+	
+
+struct c_yandex_music_create_playlist_data {
+	void *user_data; 
+	void (*callback)(void *, const char *);
+	const char *token;       
+	playlist_t **p;
+};
+
+static void c_yandex_music_create_playlist_cb(
+		void *data, const char *str, const char *error)
+{
+	struct c_yandex_music_create_playlist_data *d = data;
+	
+	if (error)
+		if (d->callback)
+			d->callback(d->user_data, error);
+	
+	if (str){
+		cJSON *json = cJSON_Parse(str);
+		if (json){
+			//d->callback(d->user_data, cJSON_Print(json));
+			//return;
+			playlist_t *p = 
+					c_yandex_music_playlist_new_from_json(json);
+			if (p){
+				// fix image
+				if (p->ogImage){
+					char str[BUFSIZ];
+					int i = lastpath(p->ogImage);
+					p->ogImage[i] = 0;
+					sprintf(str, "https://%s/%s", p->ogImage, "orig");
+					free(p->ogImage);
+					p->ogImage = strdup(str);
+				}
+				d->p[0] = p;
+			}
+		}
+	}
+}
+
+playlist_t * c_yandex_music_create_playlist(
+		const char *token,       // authorization token
+		long uid,                // user id
+		const char *title,
+		void *user_data, 
+		void (*callback)         // response and error handler - NULL-able
+				(void *user_data,
+				 const char *error))
+{
+	playlist_t *p = NULL;
+	struct c_yandex_music_create_playlist_data d = 
+		{user_data, callback, token, &p};
+	
+	char method[BUFSIZ] = "";
+	sprintf(method, "users/%ld/playlists/create", uid);
+	
+	CURL *curl = curl_easy_init();
+	if (curl){
+		char *title_str = curl_easy_escape(curl, title, strlen(title));
+		if (title_str){
+			char body[BUFSIZ];
+			sprintf(body, "title=%s&visibility=public", title_str);
+			c_yandex_music_run_method(
+					"POST", token, body, &d, c_yandex_music_create_playlist_cb, 
+					method, NULL);
+
+			free(title_str);
+		}
+		curl_easy_cleanup(curl);
+	}
+	return p;
+}
+
+struct c_yandex_music_playlist_add_tracks_data {
+	void *user_data; 
+	void (*callback)(void *, const char *);
+	const char *token;       
+};
+
+static void c_yandex_music_playlist_add_tracks_cb(
+		void *data, const char *str, const char *error)
+{
+	struct c_yandex_music_playlist_add_tracks_data *d = data;
+	
+	if (error)
+		if (d->callback)
+			d->callback(d->user_data, error);
+}
+
+int c_yandex_music_playlist_add_tracks(
+		const char *token,       // authorization token
+		long uid,                // user id
+		long kind,
+		long * track_ids,
+		long * album_ids,
+		int count,
+		void *user_data, 
+		void (*callback)         // response and error handler - NULL-able
+				(void *user_data,
+				 const char *error))
+{
+	int ret = -1;
+	struct c_yandex_music_playlist_add_tracks_data d = 
+		{user_data, callback, token};
+
+	char method[BUFSIZ] = "";
+	sprintf(method, "users/%ld/playlists/%ld/change-relative", uid, kind);
+	
+	//"{\"diff\":{\"op\":\"insert\",\"at\":0,\"tracks\":[{\"id\":\"20599729\",\"albumId\":\"2347459\"}]}}"
+	
+	char str[BUFSIZ] = 
+		"{\"diff\":{\"op\":\"insert\",\"at\":0,\"tracks\":[";
+
+	int i;
+	for (i = 0; i < count; ++i) {
+		char track[128];
+		sprintf(track, "{\"id\":\"%ld\", \"albumId\": \"%ld\"}", track_ids[i], album_ids[i]);
+		strcat(str, track);
+		if (i < count + 1)
+			strcat(str, ", ");
+	}
+	strcat(str, "]}}");
+
+	CURL *curl = curl_easy_init();
+	if (curl){
+		char *str_ = curl_easy_escape(curl, str, strlen(str));
+		if (str_){
+			char body[BUFSIZ];
+			sprintf(body, "diff='\\''%s'\\''%%20&revision=0", str_);
+			//printf("BODY: %s\n", body);
+			//callback(user_data, body);
+			ret =  c_yandex_music_run_method(
+					"POST", token, body, &d, c_yandex_music_playlist_add_tracks_cb, 
+					method, NULL);
+
+			free(str_);
+		}
+		curl_easy_cleanup(curl);
+	}
+	return ret;
 }
 	
 

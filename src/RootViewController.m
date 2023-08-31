@@ -2,7 +2,7 @@
  * File              : RootViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 29.08.2023
+ * Last Modified Date: 30.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "RootViewController.h"
@@ -12,9 +12,8 @@
 #import "FeedViewController.h"
 #import "FavoritesViewController.h"
 #import "SearchViewController.h"
+#import "PlaylistsViewController.h"
 #import "PlayerViewController.h"
-#import "PlaylistViewController.h"
-#import "RecentsViewController.h"
 
 @implementation RootViewController
 - (void)viewDidLoad {
@@ -37,26 +36,38 @@
 			initWithTabBarSystemItem:UITabBarSystemItemSearch tag:1];
 	[searchnc setTabBarItem:searchtbi];
 
+	// player view
+	PlayerViewController *pvc = 
+		[[PlayerViewController alloc]init];
+	UINavigationController *pnc =
+		[[UINavigationController alloc]initWithRootViewController:pvc];
+	UITabBarItem *ptbi = [[UITabBarItem alloc]
+		initWithTitle:@"Плеер" image:[UIImage imageNamed:@"player"] tag:2];
+			//initWithTabBarSystemItem:UITabBarSystemItemRecents tag:3];
+	[pnc setTabBarItem:ptbi];
+
+
 	// favorites view
 	FavoritesViewController *favvc = 
 		[[FavoritesViewController alloc]init];
 	UINavigationController *favnc =
 		[[UINavigationController alloc]initWithRootViewController:favvc];
 	UITabBarItem *favtbi = [[UITabBarItem alloc]
-			initWithTabBarSystemItem:UITabBarSystemItemFavorites tag:2];
+			initWithTabBarSystemItem:UITabBarSystemItemFavorites tag:3];
 	[favnc setTabBarItem:favtbi];
 
-	// recents view
-	RecentsViewController *plvc = 
-		[[RecentsViewController alloc]init];
+	// playlists view
+	PlaylistsViewController *plvc = 
+		[[PlaylistsViewController alloc]init];
 	UINavigationController *plnc =
 		[[UINavigationController alloc]initWithRootViewController:plvc];
 	UITabBarItem *pltbi = [[UITabBarItem alloc]
-			initWithTabBarSystemItem:UITabBarSystemItemRecents tag:3];
+		initWithTitle:@"Плейлисты" image:[UIImage imageNamed:@"playlist"] tag:4];
+			//initWithTabBarSystemItem:UITabBarSystemItemRecents tag:3];
 	[plnc setTabBarItem:pltbi];
 
 
-	[self setViewControllers:@[feednc, searchnc, favnc, plnc] animated:TRUE];
+	[self setViewControllers:@[feednc, searchnc, pnc, favnc, plnc] animated:TRUE];
 }
 
 @end

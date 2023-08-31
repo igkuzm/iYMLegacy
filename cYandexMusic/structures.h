@@ -2,7 +2,7 @@
  * File              : structures.h
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 25.08.2023
+ * Last Modified Date: 29.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #ifndef STRUCTURES_H
@@ -167,10 +167,12 @@ struct tag {
 	char *value;
 };
 
-typedef struct album {
+struct album {
 	int id;
+	char *realId;
 	char *error;
 	char *title;
+	char *type;
 	int year;
 	time_t releaseDate;
 	char *coverUri;
@@ -187,7 +189,10 @@ typedef struct album {
 	bool availabaleForPremiumUsers;
 	bool availableForMobile;
 	bool availablePartially;
-} album_t;
+};
+typedef struct album album_t;
+album_t * c_yandex_music_album_new_from_json(cJSON *json);
+void c_yandex_music_album_free(album_t *album);
 
 struct major {
 		int id;

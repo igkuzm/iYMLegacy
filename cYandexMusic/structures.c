@@ -2,12 +2,14 @@
  * File              : structures.c
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 25.08.2023
+ * Last Modified Date: 29.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
 #include "structures.h"
+#include "cJSON.h"
 #include <stdio.h>
+#include <string.h>
 
 void init_cover(cover_t *c, cJSON *json){
 	init_int(c, custom, json);
@@ -63,6 +65,11 @@ void free_tag(struct tag *c){
 
 void init_album(album_t *c, cJSON *json){
 	init_int(c, id, json);
+	
+	char id_str[128];
+	sprintf(id_str, "%ld", c->id);
+	c->realId = strdup(id_str);
+
 	init_string(c, error, json);
 	init_string(c, title, json);
 	init_int(c, year, json);
@@ -79,6 +86,7 @@ void init_album(album_t *c, cJSON *json){
 	init_int(c, availabaleForPremiumUsers, json);
 	init_int(c, availableForMobile, json);
 	init_int(c, availablePartially, json);
+	c->type = strdup("album");
 }
 
 void free_album(album_t *c){
@@ -116,7 +124,16 @@ void init_track(struct track *c, cJSON *json){
 	init_string(c, coverUri, json);
 	init_int(c, durationMs, json);	
 	init_int(c, fileSize, json);	
-	init_string(c, id, json);
+	
+	cJSON *id_json = cJSON_GetObjectItem(json, "id");
+	if (cJSON_IsString(id_json))
+		init_string(c, id, json);
+	else if (cJSON_IsNumber(id_json)){
+		long num = id_json->valueint;
+		char id_str[128];
+		sprintf(id_str, "%ld", num);
+		c->id = strdup(id_str);
+	}
 	init_int(c, lyricsAvailable, json);	
 	init_struct(c, major, json, major);
 	init_struct(c, normalization, json, normalization);
@@ -259,3 +276,15 @@ void c_yandex_music_playlist_free(playlist_t *p){
 		free(p);
 	}
 }
+
+album_t * c_yandex_music_album_new_from_json(cJSON *json){
+	return new_from_json(album, json);
+}
+void c_yandex_music_album_free(album_t *album){
+	if (album){
+		free_album(album);
+		free(album);
+	}
+}
+
+

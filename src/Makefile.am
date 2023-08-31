@@ -15,12 +15,14 @@ iYMLegacy_SOURCES = \
 		FeedViewController.m \
 		FavoritesViewController.m \
 		SearchViewController.m \
+		SearchViewControllerDetail.m \
 		YandexConnect.m \
 		TrackListViewController.m \
 		PlayerViewController.m \
-		PlaylistViewController.m \
 		RecentsViewController.m \
 		PlayerController.m \
+		PlaylistsViewController.m \
+		TextEditViewController.m \
 		ActionSheet.m \
 		main.m
 
@@ -47,7 +49,9 @@ _plist:
 _images:
 	cp -f ../images/Icon*.png iYMLegacy.app/.
 	cp -f ../images/player*.png iYMLegacy.app/.
-	cp -f ../images/roudcorners.png iYMLegacy.app/.
+	cp -f ../images/heart.png iYMLegacy.app/.
+	cp -f ../images/heart_fill.png iYMLegacy.app/.
+	cp -f ../images/playlist*.png iYMLegacy.app/.
 
 _nibs:
 	cp -fr ../lproj/* iYMLegacy.app/.

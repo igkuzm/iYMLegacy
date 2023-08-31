@@ -2,7 +2,7 @@
  * File              : Item.h
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 24.08.2023
- * Last Modified Date: 28.08.2023
+ * Last Modified Date: 31.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -27,6 +27,8 @@ typedef enum {
 @property ITEM_TYPE itemType;
 @property (strong) NSString *title;
 @property (strong) NSString *subtitle;
+@property (strong) NSString *albumTitle;
+@property long albumId;
 @property long uid;
 @property long kind;
 @property (strong) NSURL *coverUri;
@@ -43,6 +45,7 @@ typedef enum {
 @property (strong) NSOperationQueue *prepareImage;
 -(id)initWithTrack:(track_t *)track token:(NSString *)token;
 -(id)initWithPlaylist:(playlist_t *)playlist token:(NSString *)token;
+-(id)initWithAlbum:(album_t *)album token:(NSString *)token;
 -(void)prepareDownloadURL:(void (^) (Item *item))onDownloadURLReady;
 -(void)prepareImage:(void (^)(Item *item))onImageReady;
 @property (copy) void (^onDownloadURLReady)(Item *item);

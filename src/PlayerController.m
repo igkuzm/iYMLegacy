@@ -2,7 +2,7 @@
  * File              : PlayerController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 28.08.2023
- * Last Modified Date: 29.08.2023
+ * Last Modified Date: 31.08.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -13,16 +13,19 @@
 #include "Foundation/Foundation.h"
 #include "AVFoundation/AVAudioSession.h"
 #include "../cYandexMusic/cYandexMusic.h"
+#import "AppDelegate.h"
 
 @implementation PlayerController
 - (id)init
 {
 	if (self = [super init]) {
+		self.appDelegate = [[UIApplication sharedApplication]delegate];
 		self.playlist = [NSMutableArray array];		
 		self.current = -1;
 		self.repeat = false;
 		[self setUseApplicationAudioSession:FALSE];
 		[self setupPlayBackAudioSession];
+		[self setMovieSourceType:MPMovieSourceTypeStreaming];
 
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(willEnterFullscreen:) name:MPMoviePlayerWillEnterFullscreenNotification object:nil];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(willExitFullscreen:) name:MPMoviePlayerWillExitFullscreenNotification object:nil];
@@ -33,19 +36,48 @@
 	}
 	return self;
 }
+
+void post_error(void *data, const char *error){
+	AppDelegate *appDelegate = (__bridge AppDelegate *)data;
+	if (error){
+		NSLog(@"%s", error);
+		//dispatch_sync(dispatch_get_main_queue(), ^{
+			//[appDelegate showMessage:[NSString stringWithUTF8String:error] title:@"error"];
+		//});
+	}
+}
+
+
 -(void)playItem:(Item *)item{
 	[self setContentURL:item.downloadURL];
 	[self prepareToPlay];
 	[self play];
 	[self setPlayInfo:item];
+	if (self.delegate)
+		[self.delegate playerControllerStartPlayTrack:item];
+
+	NSInteger uid = 
+			[[NSUserDefaults standardUserDefaults]integerForKey:@"uid"];
+	if (!uid){
+		if (item.token)
+			uid = c_yandex_music_get_uid([item.token UTF8String]);
+		if (uid)
+			[[NSUserDefaults standardUserDefaults]setInteger:uid forKey:@"uid"];
+	}
+
+	if (!uid)
+		return;
 
 	[[[NSOperationQueue alloc]init] addOperationWithBlock:^{
 		c_yandex_music_post_current(
 				[item.token UTF8String], 
+				NULL,
 				[item.itemId UTF8String], 
-				NULL, NULL);
+				uid,
+				(__bridge void *)self.appDelegate, post_error);
 	}];
 }
+
 -(void)preparePlayItem:(Item *)item onDone:(void (^)())onDone{
 	if (!item.hasDownloadURL){
 		[item.prepareDownloadURL cancelAllOperations];
@@ -84,9 +116,9 @@
 
 -(void)next{
 	self.current++;
-	if (self.current >= self.playlist.count)
+	if (self.current >= self.playlist.count && self.repeat)
 		self.current = 0;
-	if (self.current != 0 || self.repeat)
+	if (self.current < self.playlist.count)
 		[self playCurrent:NULL];
 }
 
@@ -98,27 +130,31 @@
 }
 
 -(void)setPlayInfoWithArt:(Item *)item{
-	MPNowPlayingInfoCenter * nowPlaying = [MPNowPlayingInfoCenter defaultCenter];
-		MPMediaItemArtwork *artwork = [[MPMediaItemArtwork	alloc]initWithImage:item.artImage];
-		nowPlaying.nowPlayingInfo =  
-		@{MPMediaItemPropertyTitle:item.title,
-			MPMediaItemPropertyArtist:item.subtitle, 
-			MPMediaItemPropertyArtwork:artwork};
+	if (item.artImage){
+		MPNowPlayingInfoCenter * nowPlaying = [MPNowPlayingInfoCenter defaultCenter];
+			MPMediaItemArtwork *artwork = [[MPMediaItemArtwork	alloc]initWithImage:item.artImage];
+			nowPlaying.nowPlayingInfo =  
+			@{MPMediaItemPropertyTitle:item.title,
+				MPMediaItemPropertyArtist:item.subtitle, 
+				MPMediaItemPropertyAlbumTitle:item.albumTitle,
+				MPMediaItemPropertyArtwork:artwork};
+	}
 }
 
 -(void)setPlayInfo:(Item *)item{
 	MPNowPlayingInfoCenter * nowPlaying = [MPNowPlayingInfoCenter defaultCenter];
-	//if (item.hasAtrImage){
-			//[self setPlayInfoWithArt:item];
-	//} else {
+	if (item.hasAtrImage){
+			[self setPlayInfoWithArt:item];
+	} else {
 		nowPlaying.nowPlayingInfo =  
 				@{MPMediaItemPropertyTitle:
 							item.title, 
-							MPMediaItemPropertyArtist:item.subtitle};
-		//[item prepareImage:^(Item *item){
-			//[self setPlayInfoWithArt:item];
-		//}];
-	//}
+							MPMediaItemPropertyArtist:item.subtitle,
+					MPMediaItemPropertyAlbumTitle:item.albumTitle};
+		[item prepareImage:^(Item *item){
+			[self setPlayInfoWithArt:item];
+		 }];
+	}
 }
 
 #pragma mark <AudioSession Setup>
