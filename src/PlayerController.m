@@ -2,7 +2,7 @@
  * File              : PlayerController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 28.08.2023
- * Last Modified Date: 31.08.2023
+ * Last Modified Date: 12.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -25,13 +25,36 @@
 		self.repeat = false;
 		[self setUseApplicationAudioSession:FALSE];
 		[self setupPlayBackAudioSession];
-		[self setMovieSourceType:MPMovieSourceTypeStreaming];
+		//[self setMovieSourceType:MPMovieSourceTypeStreaming];
 
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(willEnterFullscreen:) name:MPMoviePlayerWillEnterFullscreenNotification object:nil];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(willExitFullscreen:) name:MPMoviePlayerWillExitFullscreenNotification object:nil];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(enteredFullscreen:) name:MPMoviePlayerDidEnterFullscreenNotification object:nil];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(exitedFullscreen:) name:MPMoviePlayerDidExitFullscreenNotification object:nil];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playbackFinished:) name:MPMoviePlayerPlaybackDidFinishNotification object:nil];
+	[[NSNotificationCenter defaultCenter] 
+		addObserver:self selector:@selector(willEnterFullscreen:) 
+					 name:MPMoviePlayerWillEnterFullscreenNotification object:nil];
+	[[NSNotificationCenter defaultCenter] 
+		addObserver:self selector:@selector(willExitFullscreen:) 
+					 name:MPMoviePlayerWillExitFullscreenNotification object:nil];
+	[[NSNotificationCenter defaultCenter] 
+		addObserver:self selector:@selector(enteredFullscreen:) 
+					 name:MPMoviePlayerDidEnterFullscreenNotification object:nil];
+	[[NSNotificationCenter defaultCenter] 
+		addObserver:self selector:@selector(exitedFullscreen:) 
+					 name:MPMoviePlayerDidExitFullscreenNotification object:nil];
+	[[NSNotificationCenter defaultCenter] 
+		addObserver:self selector:@selector(playbackFinished:) 
+					 name:MPMoviePlayerPlaybackDidFinishNotification object:nil];
+	[[NSNotificationCenter defaultCenter] 
+		addObserver:self selector:@selector(loadStateChanged:) 
+					 name:MPMoviePlayerLoadStateDidChangeNotification object:nil];
+	[[NSNotificationCenter defaultCenter] 
+		addObserver:self selector:@selector(nowPlayingChanged:) 
+					 name:MPMoviePlayerNowPlayingMovieDidChangeNotification object:nil];
+	[[NSNotificationCenter defaultCenter] 
+		addObserver:self selector:@selector(playbackStateChanged:) 
+					 name:MPMoviePlayerPlaybackStateDidChangeNotification object:nil];
+		// add timer
+		self.timer = [NSTimer scheduledTimerWithTimeInterval:10 
+				target:self selector:@selector(timer:) 
+					userInfo:nil repeats:YES];
 
 	}
 	return self;
@@ -47,40 +70,93 @@ void post_error(void *data, const char *error){
 	}
 }
 
+-(void)timer:(id)sender{
+	// do timer funct
+	if (!self.nowPlaying)
+		return;
+
+	if (self.playbackState == MPMoviePlaybackStatePlaying){
+		NSInteger uid = 
+				[[NSUserDefaults standardUserDefaults]integerForKey:@"uid"];
+		if (!uid){
+			if (self.nowPlaying.token)
+				uid = c_yandex_music_get_uid([self.nowPlaying.token UTF8String]);
+			if (uid)
+				[[NSUserDefaults standardUserDefaults]setInteger:uid forKey:@"uid"];
+		}
+
+		if (!uid)
+			return;
+
+		[[[NSOperationQueue alloc]init] addOperationWithBlock:^{
+			c_yandex_music_post_current(
+					[self.nowPlaying.token UTF8String], 
+					NULL,
+					[self.nowPlaying.itemId UTF8String], 
+					self.duration,
+					self.playableDuration,
+					uid,
+					(__bridge void *)self.appDelegate, post_error);
+		}];
+	}
+}
 
 -(void)playItem:(Item *)item{
 	[self setContentURL:item.downloadURL];
 	[self prepareToPlay];
 	[self play];
 	[self setPlayInfo:item];
+	
+	[self setNowPlaying:item];
+	[self setPlaying:self.current];
 	if (self.delegate)
 		[self.delegate playerControllerStartPlayTrack:item];
 
-	NSInteger uid = 
-			[[NSUserDefaults standardUserDefaults]integerForKey:@"uid"];
-	if (!uid){
-		if (item.token)
-			uid = c_yandex_music_get_uid([item.token UTF8String]);
-		if (uid)
-			[[NSUserDefaults standardUserDefaults]setInteger:uid forKey:@"uid"];
+	// download current and next items after 10 sec
+	if (self.downloadPlaylist){
+		// stop timer
+		[self.downloadPlaylist fire];
 	}
+	// start after 10 sec
+	self.downloadPlaylist = 
+		[NSTimer scheduledTimerWithTimeInterval:10 
+			target:self selector:@selector(downloadCurrentAndNext:) 
+			userInfo:nil repeats:NO];
+}
 
-	if (!uid)
-		return;
+-(void)downloadNext:(int)i{
+	// download next item
+	if (
+			self.playlist.count > self.current + i &&
+			i < 10)
+	{
+		Item *item = [self.playlist objectAtIndex:self.current + i];
+		if (item){
+			[item downloadFile:^(Item *item){
+				// do when downloaded
+				// prepare image
+				[item prepareImage:^(Item *item){
+					// on done
+					[self downloadNext:i+1];
+				}];
+			}];
+		}
+	}
+}
 
-	[[[NSOperationQueue alloc]init] addOperationWithBlock:^{
-		c_yandex_music_post_current(
-				[item.token UTF8String], 
-				NULL,
-				[item.itemId UTF8String], 
-				uid,
-				(__bridge void *)self.appDelegate, post_error);
-	}];
+-(void)downloadCurrentAndNext:(id)sender{
+	// download current
+	Item *item = [self.playlist objectAtIndex:self.current];
+	if (item){
+		[item downloadFile:^(Item *item){
+			// do when downloaded
+			[self downloadNext:1];
+		}];
+	}
 }
 
 -(void)preparePlayItem:(Item *)item onDone:(void (^)())onDone{
-	if (!item.hasDownloadURL){
-		[item.prepareDownloadURL cancelAllOperations];
+	if (!item.hasFile && !item.hasDownloadURL){
 		[item prepareDownloadURL:^(Item *item){
 			[self playItem:item];
 			if (onDone)
@@ -94,9 +170,11 @@ void post_error(void *data, const char *error){
 }
 
 -(void)playCurrent:(void (^)())onDone{
-	Item *item = [self.playlist objectAtIndex:self.current];
-	if (item)
-		[self preparePlayItem:item onDone:onDone];
+	if (self.playlist.count > self.current){
+		Item *item = [self.playlist objectAtIndex:self.current];
+		if (item)
+			[self preparePlayItem:item onDone:onDone];
+	}
 }
 
 -(void)addToLast:(Item *)item {
@@ -218,6 +296,20 @@ NSNumber* reason = [[notification userInfo] objectForKey:MPMoviePlayerPlaybackDi
 	//[self.movieController setFullscreen:NO animated:YES];
 }
 
+- (void)loadStateChanged:(NSNotification*)notification {
+	switch (self.loadState) {
+		case MPMovieLoadStateUnknown: break;
+		case MPMovieLoadStateStalled: break;
+		case MPMovieLoadStatePlayable: break;
+		case MPMovieLoadStatePlaythroughOK: break;
+	
+		default: break;
+	}
+}
+- (void)nowPlayingChanged:(NSNotification*)notification {
+}
+- (void)playbackStateChanged:(NSNotification*)notification {
+}
 
 @end
 

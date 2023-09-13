@@ -2,7 +2,7 @@
  * File              : PlayerViewController.h
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 31.08.2023
+ * Last Modified Date: 10.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -21,6 +21,8 @@
 @property (strong) NSArray *data;
 @property (strong) NSMutableArray *loadedData;
 @property (strong) UISearchBar *searchBar;
+@property (strong) UILabel *label;
+@property (strong) UILabel *subLabel;
 @property (strong) UIBarButtonItem *like;
 @property (strong) UIBarButtonItem *space;
 @property (strong) UIBarButtonItem *share;

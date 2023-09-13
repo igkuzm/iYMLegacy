@@ -2,7 +2,7 @@
  * File              : ActionSheet.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 28.08.2023
- * Last Modified Date: 30.08.2023
+ * Last Modified Date: 10.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -16,7 +16,7 @@
 - (id)initWithItem:(Item *)item isDir:(BOOL)isDir onDone:(void (^)())onDone
 {
 	if (self = [super 
-			initWithTitle:item.title 
+			initWithTitle:nil 
 					 delegate:self 
 					 cancelButtonTitle:@"отмена" 
 					 destructiveButtonTitle:nil 

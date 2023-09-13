@@ -2,7 +2,7 @@
  * File              : FavoritesViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 31.08.2023
+ * Last Modified Date: 13.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "FavoritesViewController.h"
@@ -28,7 +28,14 @@
 		// allocate array
 		self.loadedData = self.appDelegate.likedTracks;
 		self.data = [NSArray array];
-		
+
+		// cache
+		self.cache = 
+				[[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) 
+						objectAtIndex:0] stringByAppendingPathComponent:@"favorites.plist"];
+		self.cacheLoaded = NO;
+		self.needRefresh = NO;
+
 		// check token
 		NSString *token = 
 			[[NSUserDefaults standardUserDefaults]valueForKey:@"token"];
@@ -91,15 +98,15 @@ static int get_favorites(void *data, track_t *track, const char *error)
 
 	if (track){
 		Item *t = [[Item alloc]initWithTrack:track token:self.token];
-		dispatch_sync(dispatch_get_main_queue(), ^{
-			// Update your UI
-			[self.loadedData addObject:t];
-			if (self.viewIsLoaded){
-				[self filterData];
-				[self.spinner stopAnimating];
-				[self.refreshControl endRefreshing];
-			}
-		});
+		[self.loadedData addObject:t];
+		if ((self.viewIsLoaded && !self.cacheLoaded) || self.needRefresh){
+			dispatch_sync(dispatch_get_main_queue(), ^{
+				// Update your UI
+					[self filterData];
+					[self.spinner stopAnimating];
+					[self.refreshControl endRefreshing];
+			});
+		}
 	}
 	return 0;
 }
@@ -146,16 +153,45 @@ static int get_favorites(void *data, track_t *track, const char *error)
 
 	[self.loadedData removeAllObjects];
 	[self.tableView reloadData];
+	
+	//load data from cache
+	//if (!self.cacheLoaded){
+		//NSData *codedData = [NSData dataWithContentsOfFile:self.cache];
+		//if (codedData){
+			//NSKeyedUnarchiver *unarchiver = 
+					//[[NSKeyedUnarchiver alloc]initForReadingWithData:codedData];
+			//NSArray *array = 
+				//[unarchiver decodeObjectForKey:@"favorites"]; 
+			//[unarchiver finishDecoding];
+			//if (array){
+				//for (Item *item in array){
+					//[self.loadedData addObject:item];
+				//}
+				//[self filterData];
+				//[self.spinner stopAnimating];
+				//[self.refreshControl endRefreshing];
+				//self.cacheLoaded = YES;
+			//}
+		//}
+	//}
+
 	[self.syncData addOperationWithBlock:^{
 		c_yandex_music_get_favorites(
 				[token UTF8String], 
 				"100x100", uid, 
 				(__bridge void *)self, 
 				get_favorites);
+		//NSMutableData *data = [NSMutableData data];
+		//NSKeyedArchiver *archiver = [[NSKeyedArchiver alloc]initForWritingWithMutableData:data];
+		//[archiver encodeObject:self.loadedData forKey:@"favorites"];
+		//[archiver finishEncoding];
+		//[data writeToFile:self.cache atomically:YES];
+		//self.needRefresh = NO;
 	}];	
 }
 
 -(void)refresh:(id)sender{
+	self.needRefresh = YES;
 	[self reloadData];
 }
 
@@ -196,7 +232,8 @@ static int get_favorites(void *data, track_t *track, const char *error)
 		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:NO onDone:^{
 			[spinner stopAnimating];
 		}];
-		[as showInView:tableView];
+		//[as showInView:self.view];
+		[as showFromTabBar:self.tabBarController.tabBar];
 	
 	// unselect row
 	[tableView deselectRowAtIndexPath:indexPath animated:true];

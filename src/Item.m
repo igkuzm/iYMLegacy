@@ -2,10 +2,11 @@
  * File              : Item.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 24.08.2023
- * Last Modified Date: 31.08.2023
+ * Last Modified Date: 13.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "Item.h"
+#include "UIKit/UIKit.h"
 #include "stdbool.h"
 #include "AVFoundation/AVFoundation.h"
 #include "Foundation/Foundation.h"
@@ -22,7 +23,24 @@
 		self.albumTitle = @"";
 		self.hasAtrImage = NO;
 		self.hasDownloadURL = false;
+		self.hasFile = false;
 		self.albumId = 0;
+		self.prepareDownloadURL = [[NSOperationQueue alloc]init];
+		self.downloadFile = [[NSOperationQueue alloc]init];
+		self.prepareImage = [[NSOperationQueue alloc]init];
+		NSFileManager *fm = NSFileManager.defaultManager;
+		self.thumbmailsCache = 
+				[[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) 
+						objectAtIndex:0] stringByAppendingPathComponent:@"thumbnails"];
+		[fm createDirectoryAtPath:self.thumbmailsCache attributes:nil];
+		self.imagesCache = 
+				[[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) 
+						objectAtIndex:0] stringByAppendingPathComponent:@"images"];
+		[fm createDirectoryAtPath:self.imagesCache attributes:nil];
+		self.tracksCache = 
+				[[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) 
+						objectAtIndex:0] stringByAppendingPathComponent:@"tracks"];
+		[fm createDirectoryAtPath:self.tracksCache attributes:nil];
 	}
 	return self;
 }
@@ -85,6 +103,7 @@
 		self.itemType = ITEM_PLAYLIST;
 		self.uid   = playlist->uid;
 		self.kind  = playlist->kind;	
+		self.itemId = [NSString stringWithFormat:@"%ld_%ld", self.uid, self.kind];
 		if (playlist->title)
 			self.title = [NSString stringWithUTF8String:playlist->title]; 
 		if (playlist->description)
@@ -136,12 +155,12 @@
 }
 
 - (void)downloadSmallImage{
-		NSString *filepath = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"%@small.png", self.itemId]];
-		NSURL *url = [NSURL fileURLWithPath:filepath]; 
+		NSString *filepath = [self.thumbmailsCache 
+				stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.png", self.itemId]];
 		// check if file exists
-		if ([[NSFileManager defaultManager] fileExistsAtPath:url.path]){
+		if ([[NSFileManager defaultManager] fileExistsAtPath:filepath]){
 			dispatch_sync(dispatch_get_main_queue(), ^{
-				self.coverImage = [UIImage imageWithContentsOfFile:self.artImageURL.path];
+				self.coverImage = [UIImage imageWithContentsOfFile:filepath];
 				if (self.imageView)
 					[self.imageView setImage:self.coverImage];
 			});
@@ -149,6 +168,7 @@
 			NSOperationQueue *operation = [[NSOperationQueue alloc]init];
 			[operation addOperationWithBlock:^{
 				NSData *data = [NSData dataWithContentsOfURL:self.coverUri];
+				[data writeToFile:filepath atomically:YES];
 				dispatch_sync(dispatch_get_main_queue(), ^{
 					self.coverImage = [UIImage imageWithData:data];
 					if (self.imageView)
@@ -202,17 +222,20 @@ static int get_file_url(void *data, const char *url_str, const char *error){
 	self.onDownloadURLReady = onDownloadURLReady;
 	
 	// prepare file
-	NSString *filepath = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.mp3", self.itemId]];
+	NSString *filepath = [self.tracksCache stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.mp3", self.itemId]];
 	NSURL *url = [NSURL fileURLWithPath:filepath]; 
 	// check if file exists
-	if ([[NSFileManager defaultManager] fileExistsAtPath:url.path]){
+	if ([[NSFileManager defaultManager] fileExistsAtPath:filepath]){
 		self.downloadURL = url;
+		[self setHasFile:YES];
+		[self setHasDownloadURL:YES];
 		//self.playerItem = [AVPlayerItem playerItemWithURL:self.fileURL];
 		if (onDownloadURLReady)
 			onDownloadURLReady(self);
 	} else {
 		// dowload file
-		self.prepareDownloadURL = [[NSOperationQueue alloc]init];
+		[self.downloadFile cancelAllOperations];
+		[self.prepareDownloadURL cancelAllOperations];
 		[self.prepareDownloadURL addOperationWithBlock:^{
 				c_yandex_music_get_download_url(
 						[self.token UTF8String], [self.itemId UTF8String], 
@@ -221,20 +244,53 @@ static int get_file_url(void *data, const char *url_str, const char *error){
 	}
 }
 
+-(void)downloadFile:(void (^) (Item *item))onFileReady{
+	self.onFileReady = onFileReady;
+	
+	// prepare file
+	NSString *filepath = [self.tracksCache stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.mp3", self.itemId]];
+	NSURL *url = [NSURL fileURLWithPath:filepath]; 
+	// check if file exists
+	if ([[NSFileManager defaultManager] fileExistsAtPath:filepath]){
+		self.downloadURL = url;
+		[self setHasFile:YES];
+		[self setHasDownloadURL:YES];
+		//self.playerItem = [AVPlayerItem playerItemWithURL:self.fileURL];
+		if (onFileReady)
+			onFileReady(self);
+	} else {
+		// get dowload url
+		[self prepareDownloadURL:^(Item *item){
+			[self.downloadFile cancelAllOperations];
+			[self.downloadFile addOperationWithBlock:^{
+				NSData *data = [NSData dataWithContentsOfURL:item.downloadURL];
+				[data writeToURL:url atomically:YES];
+				dispatch_sync(dispatch_get_main_queue(), ^{
+					self.hasFile = YES;
+					self.hasDownloadURL = YES;
+					self.downloadURL = url;
+					if (onFileReady)
+						onFileReady(self);	
+				});
+			}];
+		}];
+	}
+}
+
 -(void)prepareImage:(void (^)(Item *item))onImageReady{
 	self.onImageReady = onImageReady;
 	
 	// prepare file
-	NSString *filepath = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.png", self.itemId]];
+	NSString *filepath = [self.imagesCache stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.png", self.itemId]];
 	self.artImageURL = [NSURL fileURLWithPath:filepath]; 
 	// check if file exists
-	if ([[NSFileManager defaultManager] fileExistsAtPath:self.artImageURL.path]){
+	if ([[NSFileManager defaultManager] fileExistsAtPath:filepath]){
 		self.artImage = [UIImage imageWithContentsOfFile:self.artImageURL.path];
 		if (self.onImageReady)
 			self.onImageReady(self);
 	} else {
 		// download image
-		self.prepareImage = [[NSOperationQueue alloc]init];
+		[self.prepareImage cancelAllOperations];
 		[self.prepareImage addOperationWithBlock:^{
 			c_yandex_music_get_track_by_id(
 					[self.token UTF8String], 
@@ -246,6 +302,84 @@ static int get_file_url(void *data, const char *url_str, const char *error){
 	}
 }
 
+#pragma mark <NSCoding Protocol>
+- (void)encodeWithCoder:(NSCoder *)aCoder {
+	[aCoder encodeObject:self.token forKey:kToken];
+	[aCoder encodeObject:self.itemId forKey:kItemId];
+	[aCoder encodeInteger:self.itemType forKey:kItemType];
+	[aCoder encodeObject:self.title forKey:kTitle];
+	[aCoder encodeObject:self.subtitle forKey:kSubtitle];
+	[aCoder encodeObject:self.albumTitle forKey:kAlbumTitle];
+	[aCoder encodeInteger:self.albumId forKey:kAlbumId];
+	[aCoder encodeInteger:self.uid forKey:kUID];
+	[aCoder encodeInteger:self.kind forKey:kKind];
+	[aCoder encodeObject:self.coverUri forKey:kCoverUri];
+	[aCoder encodeObject:self.downloadURL forKey:kDownloadURL];
+	[aCoder encodeBool:self.hasDownloadURL forKey:kHasDownloadURL];
+	[aCoder encodeBool:self.hasFile forKey:kHasFile];
+	[aCoder encodeObject:self.coverImage forKey:kCoverImage];
+	[aCoder encodeObject:self.artImageURL forKey:kArtImageURL];
+	[aCoder encodeBool:self.hasAtrImage forKey:kHasArtImage];
+}
+
+- (id)initWithToken:(NSString *)token
+							itemId:(NSString *)itemId
+						itemType:(NSInteger)itemType
+							 title:(NSString *)title
+						subtitle:(NSString *)subtitle
+					albumTitle:(NSString *)albumTitle
+						 albumId:(NSInteger)albumId
+								 uid:(NSInteger)uid
+								kind:(NSInteger)kind
+						coverUri:(NSURL *)coverUri
+				 downloadURL:(NSURL *)downloadURL
+			hasDownloadURL:(BOOL)hasDownloadURL
+						 hasFile:(BOOL)hasFile
+					coverImage:(UIImage *)coverImage
+				 artImageURL:(NSURL *)artImageURL
+				 hasArtImage:(BOOL)hasArtImage
+{
+	if (self = [super init]) {
+		self.token = token;
+		self.itemId = itemId;
+		self.itemType = itemType;
+		self.title = title;
+		self.subtitle = subtitle;
+		self.albumTitle = albumTitle;
+		self.albumId = albumId;
+		self.uid = uid;
+		self.kind = kind;
+		self.coverUri = coverUri;
+		self.downloadURL = downloadURL;
+		self.hasDownloadURL = hasDownloadURL;
+		self.hasFile = hasFile;
+		self.coverImage = coverImage;
+		self.artImageURL = artImageURL;
+		self.hasAtrImage = hasArtImage;
+	}
+	return self;
+}
+
+- (id)initWithCoder:(NSCoder *)aDecoder {
+	return [self 
+		initWithToken: [aDecoder decodeObjectForKey:kToken]
+					 itemId: [aDecoder decodeObjectForKey:kItemId]
+				 itemType: [aDecoder decodeIntegerForKey:kItemType]
+						title: [aDecoder decodeObjectForKey:kTitle]
+				 subtitle: [aDecoder decodeObjectForKey:kSubtitle]
+			 albumTitle: [aDecoder decodeObjectForKey:kAlbumTitle]
+					albumId: [aDecoder decodeIntegerForKey:kAlbumId]
+							uid: [aDecoder decodeIntegerForKey:kUID]
+						 kind: [aDecoder decodeIntegerForKey:kKind]
+				 coverUri: [aDecoder decodeObjectForKey:kCoverUri]
+			downloadURL: [aDecoder decodeObjectForKey:kDownloadURL]
+	 hasDownloadURL: [aDecoder decodeBoolForKey:kHasDownloadURL]
+					hasFile: [aDecoder decodeBoolForKey:kHasFile]
+			 coverImage: [aDecoder decodeObjectForKey:kCoverImage]
+			artImageURL: [aDecoder decodeObjectForKey:kArtImageURL]
+			hasArtImage: [aDecoder decodeBoolForKey:kHasArtImage]
+	];
+}
 
 @end
 // vim:ft=objc

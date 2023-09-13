@@ -2,7 +2,7 @@
  * File              : FeedViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 30.08.2023
+ * Last Modified Date: 13.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "FeedViewController.h"
@@ -195,7 +195,8 @@ static int get_feed(void *data, playlist_t *playlist,  track_t *track, const cha
 		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:NO onDone:^{
 			[spinner stopAnimating];
 		}];
-		[as showInView:tableView];
+		//[as showInView:self.view];
+		[as showFromTabBar:self.tabBarController.tabBar];
 	}
 	else if (self.selected.itemType == ITEM_PLAYLIST ||
 					 self.selected.itemType == ITEM_PODCAST  ||
@@ -221,7 +222,7 @@ static int get_feed(void *data, playlist_t *playlist,  track_t *track, const cha
 	ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:YES onDone:^{
 		[spinner stopAnimating];
 	}];
-	[as showInView:tableView];
+	[as showFromTabBar:self.tabBarController.tabBar];
 }
 
 

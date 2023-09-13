@@ -2,7 +2,7 @@
  * File              : TrackListViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 31.08.2023
+ * Last Modified Date: 12.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "TrackListViewController.h"
@@ -185,7 +185,8 @@ static int get_tracks(void *data, track_t *track, const char *error)
 		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:NO onDone:^{
 			[spinner stopAnimating];
 		}];
-		[as showInView:tableView];
+		//[as showInView:tableView];
+		[as showFromTabBar:self.tabBarController.tabBar];
 		
 		// unselect row
 	[tableView deselectRowAtIndexPath:indexPath animated:true];

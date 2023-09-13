@@ -2,7 +2,7 @@
  * File              : SearchViewControllerDetail.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 29.08.2023
+ * Last Modified Date: 13.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "SearchViewControllerDetail.h"
@@ -29,11 +29,11 @@
 - (void)viewDidLoad {
 	
 	// play button
-	UIBarButtonItem *playButtonItem = 
-		[[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemPlay 
-				target:self.appDelegate action:@selector(playButtonPushed:)]; 
-	self.navigationItem.rightBarButtonItem = playButtonItem;
+	//UIBarButtonItem *playButtonItem = 
+		//[[UIBarButtonItem alloc]
+				//initWithBarButtonSystemItem:UIBarButtonSystemItemPlay 
+				//target:self.appDelegate action:@selector(playButtonPushed:)]; 
+	//self.navigationItem.rightBarButtonItem = playButtonItem;
 }
 
 #pragma mark <TableViewDelegate Meythods>
@@ -87,10 +87,11 @@
 			UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
 			UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
 			[spinner startAnimating];
-		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:NO onDone:^{
+			ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:NO onDone:^{
 				[spinner stopAnimating];
 			}];
-			[as showInView:tableView];		
+			//[as showInView:self.view];		
+			[as showFromTabBar:self.tabBarController.tabBar];
 		}
 	}
 	else if (self.selected.itemType == ITEM_PLAYLIST ||
@@ -112,7 +113,7 @@
 	ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:YES onDone:^{
 		[spinner stopAnimating];
 	}];
-	[as showInView:tableView];
+	[as showFromTabBar:self.tabBarController.tabBar];
 }
 
 

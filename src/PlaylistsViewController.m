@@ -2,7 +2,7 @@
  * File              : PlaylistsViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 30.08.2023
+ * Last Modified Date: 13.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "PlaylistsViewController.h"
@@ -191,7 +191,7 @@ static int get_user_playlists(void *data, playlist_t *playlist, const char *erro
 	ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:YES onDone:^{
 		[spinner stopAnimating];
 	}];
-	[as showInView:tableView];
+	[as showFromTabBar:self.tabBarController.tabBar];
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {

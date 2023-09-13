@@ -31,13 +31,19 @@ iYMLegacy_CFLAGS =
 iYMLegacy_OBJCFLAGS = -fobjc-arc
 
 iYMLegacy_LDFLAGS = \
-			-framework UIKit -framework MediaPlayer -framework CoreMedia -framework AVFoundation -framework Foundation -framework QuickLook -framework CoreGraphics
+			-framework UIKit \
+			-framework MediaPlayer \
+			-framework CoreMedia \
+			-framework AVFoundation \
+			-framework Foundation \
+			-framework QuickLook \
+			-framework CoreGraphics
 
 iYMLegacy_LDADD = \
-									-lssl -lcurl -L../libs -L/usr/lib/arc -larclite_iphoneos
+									-lssl -lcurl -L../libs
 
 bin_SCRIPTS = iYMLegacy.ipa
-CLEANiFILES = $(bin_SCRIPTS)
+CLEANFILES = $(bin_SCRIPTS)
 EXTRA_DIST  = iYMLegacy.ipa
 
 _dir:

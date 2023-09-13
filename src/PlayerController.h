@@ -2,7 +2,7 @@
  * File              : PlayerController.h
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 28.08.2023
- * Last Modified Date: 31.08.2023
+ * Last Modified Date: 11.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -14,9 +14,13 @@
 @end
 @interface PlayerController : MPMoviePlayerController
 @property (strong,nonatomic) NSMutableArray *playlist;
+@property (strong,nonatomic) Item *nowPlaying;
+@property NSInteger playing;
 @property NSInteger current;
 @property BOOL repeat;
 @property (strong) id appDelegate;
+@property (strong) NSTimer *timer;
+@property (strong) NSTimer *downloadPlaylist;
 @property (weak) id delegate;
 -(void)addToTopAndPlay:(Item *)item onDone:(void (^)())onDone;
 -(void)addToLast:(Item *)item;

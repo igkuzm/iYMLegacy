@@ -2,7 +2,7 @@
  * File              : PlayerViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 31.08.2023
+ * Last Modified Date: 13.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "PlayerViewController.h"
@@ -12,7 +12,6 @@
 #include "Foundation/Foundation.h"
 #import "YandexConnect.h"
 #import "../cYandexMusic/cYandexMusic.h"
-#import "ActionSheet.h"
 
 @implementation PlayerViewController
 
@@ -26,9 +25,35 @@
 	
 	// ToolBar	
 	self.navigationController.toolbarHidden = NO;
-	self.like = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"info.circle.fill"] style:UIBarButtonItemStylePlain target:self action:@selector(likeIsPushed:)];
-	self.space = [[UIBarButtonItem alloc]initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:self action:nil];	
+	
+	self.like = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"heart"] style:UIBarButtonItemStylePlain target:self action:@selector(likeIsPushed:)];
+
 	self.share = [[UIBarButtonItem alloc]initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(shareIsPushed:)];
+	
+	self.label = [[UILabel alloc]initWithFrame:CGRectMake(0.0 , 6.0, self.view.frame.size.width, 16)];
+	[self.label setFont:[UIFont fontWithName:@"Helvetica-Bold" size:14]];
+	[self.label setBackgroundColor:[UIColor clearColor]];
+	[self.label setTextColor:[UIColor whiteColor]];
+	//[self.label setTextColor:[UIColor colorWithRed:157.0/255.0 green:157.0/255.0 blue:157.0/255.0 alpha:1.0]];
+	//[self.label setText:@"Title"];
+	[self.label setTextAlignment:NSTextAlignmentCenter];
+	
+	self.subLabel = [[UILabel alloc]initWithFrame:CGRectMake(0 , 25, self.view.frame.size.width, 14)];
+	[self.subLabel setFont:[UIFont fontWithName:@"Helvetica" size:12]];
+	[self.subLabel setBackgroundColor:[UIColor clearColor]];
+	[self.subLabel setTextColor:[UIColor whiteColor]];
+	//[self.subLabel setTextColor:[UIColor colorWithRed:157.0/255.0 green:157.0/255.0 blue:157.0/255.0 alpha:1.0]];
+	//[self.subLabel setText:@"SubTitle"];
+	[self.subLabel setTextAlignment:NSTextAlignmentCenter];
+	
+	UIView *labelView = [[UIView alloc]initWithFrame:CGRectMake(0 , 0, self.view.frame.size.width, 40)];
+	[labelView addSubview:self.label];
+	[labelView addSubview:self.subLabel];
+	
+	//UIBarButtonItem *title = [[UIBarButtonItem alloc] initWithCustomView:self.label];
+	self.space = [[UIBarButtonItem alloc]initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:self action:nil];	
+	self.space.customView = labelView;
+	
 	[self setToolbarItems:@[self.like, self.space, self.share] animated:NO];
 
 	// close button
@@ -77,13 +102,16 @@
     [super viewWillAppear:animated];
 		[self reloadData];
     [self.tableView setContentOffset:CGPointMake(0, 44)];
-
 		// check track is liked
 		[self.appDelegate.player setDelegate:self];
 		if (self.appDelegate.player.current >=0){
-			self.current = [self.appDelegate.player.playlist objectAtIndex:self.appDelegate.player.current]; 
-			if (self.current)
+			self.current = self.appDelegate.player.nowPlaying;
+			if (self.current){
 				[self checkTrackIsLiked:self.current];
+				// set title/subtitle
+				[self.label setText:self.current.title];
+				[self.subLabel setText:self.current.subtitle];
+			}
 		}
 }
 - (void)searchBarCancelButtonClicked:(UISearchBar *)searchBar {
@@ -120,11 +148,9 @@
 
 	if (self.liked){
 		[self.like setImage:[UIImage imageNamed:@"heart_fill"]];	
-		[self setToolbarItems:@[self.like, self.space, self.share] animated:NO];
 	} 
 	else{
 		[self.like setImage:[UIImage imageNamed:@"heart"]];	
-		[self setToolbarItems:@[self.like, self.space, self.share] animated:NO];
 	}
 }
 
@@ -140,14 +166,15 @@ void like_callback(void *data, const char *error){
 }
 
 -(void)shareIsPushed:(id)sender{
-	UIActionSheet *as = [[UIActionSheet alloc]	
-			initWithTitle:@"Плейлист" 
+	UIActionSheet *as = [[UIActionSheet alloc]
+			initWithTitle:nil 
 					 delegate:self 
 					 cancelButtonTitle:@"отмена" 
 					 destructiveButtonTitle:nil 
 					 otherButtonTitles:
 													@"сохранить плейлист", nil];
-	[as showInView:self.tableView];
+	//[as showInView:self.view];
+	[as showFromToolbar:self.navigationController.toolbar];
 }
 
 -(void)likeIsPushed:(id)sender{
@@ -163,7 +190,6 @@ void like_callback(void *data, const char *error){
 
 		if (self.liked){
 			[self.like setImage:[UIImage imageNamed:@"heart"]];	
-			[self setToolbarItems:@[self.like, self.space, self.share] animated:NO];
 			[self.doLike cancelAllOperations];
 			[self.doLike addOperationWithBlock:^{
 					c_yandex_music_set_unlike_current(
@@ -176,7 +202,6 @@ void like_callback(void *data, const char *error){
 			[self.doLike cancelAllOperations];
 			[self.doLike addOperationWithBlock:^{
 			[self.like setImage:[UIImage imageNamed:@"heart_fill"]];	
-			[self setToolbarItems:@[self.like, self.space, self.share] animated:NO];
 					c_yandex_music_set_like_current(
 							[self.token UTF8String], 
 							uid, [self.current.itemId UTF8String], 
@@ -189,6 +214,8 @@ void like_callback(void *data, const char *error){
 -(void)playerControllerStartPlayTrack:(Item *)track{
 	self.current = track;
 	[self checkTrackIsLiked:track];
+	[self.label setText:track.title];
+	[self.subLabel setText:track.subtitle];
 }
 
 #pragma mark <TableViewDelegate Meythods>
@@ -203,7 +230,7 @@ void like_callback(void *data, const char *error){
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 	Item *item = [self.data objectAtIndex:indexPath.item];
 	UITableViewCell *cell = nil;
-	if (self.appDelegate.player.current == indexPath.item)
+	if (self.appDelegate.player.nowPlaying && self.appDelegate.player.playing == indexPath.item)
 	{
 		cell = [self.tableView dequeueReusableCellWithIdentifier:@"player"];
 		if (cell == nil){

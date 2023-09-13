@@ -2,7 +2,7 @@
  * File              : cYandexMusic.c
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 31.08.2023
+ * Last Modified Date: 11.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 
@@ -1015,6 +1015,8 @@ char * c_yandex_music_post_current(
 		const char *token,       // authorization token
 		const char *uuid,
 		const char *trackId,
+		int track_length_seconds,
+		int track_played_seconds,
 		long uid,
 		void *user_data, 
 		void (*callback)         // response and error handler - NULL-able
@@ -1057,9 +1059,12 @@ char * c_yandex_music_post_current(
 					"&uid=%ld"
 					"&track-id=%s"
 					"&play-id=%s"
+					"&track-length-seconds=%d"
+					"&total-played-seconds=%d"
 					"&client-now=%s"
-					 "&timestamp=%s",
-					uid, trackId, uuid, date, date);
+					"&timestamp=%s",
+					uid, trackId, uuid, track_length_seconds, 
+					track_played_seconds, date, date);
 		
 		if (c_yandex_music_run_method(
 					"POST", token, body, &d, 

@@ -2,7 +2,7 @@
  * File              : SearchViewController.m
  * Author            : Igor V. Sementsov <ig.kuzm@gmail.com>
  * Date              : 22.08.2023
- * Last Modified Date: 30.08.2023
+ * Last Modified Date: 13.09.2023
  * Last Modified By  : Igor V. Sementsov <ig.kuzm@gmail.com>
  */
 #import "SearchViewController.h"
@@ -247,10 +247,11 @@ int search_tracks(void *data, playlist_t *playlist, album_t *album, track_t *tra
 				UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
 				UIActivityIndicatorView *spinner = (UIActivityIndicatorView*)cell.accessoryView;
 				[spinner startAnimating];
-		ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:NO onDone:^{
+				ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:NO onDone:^{
 					[spinner stopAnimating];
 				}];
-				[as showInView:tableView];		
+				//[as showInView:self.view];		
+				[as showFromTabBar:self.tabBarController.tabBar];
 			}
 		}
 		else if (self.selected.itemType == ITEM_PLAYLIST ||
@@ -295,7 +296,7 @@ int search_tracks(void *data, playlist_t *playlist, album_t *album, track_t *tra
 	ActionSheet *as = [[ActionSheet alloc]initWithItem:self.selected isDir:YES onDone:^{
 		[spinner stopAnimating];
 	}];
-	[as showInView:tableView];
+	[as showFromTabBar:self.tabBarController.tabBar];
 }
 
 #pragma mark <SEARCHBAR FUNCTIONS>
