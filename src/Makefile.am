@@ -9,6 +9,7 @@ iYMLegacy_SOURCES = \
 		../cYandexMusic/uuid4.c \
 		../cYandexMusic/cJSON.c \
 		../cYandexMusic/ezxml.c \
+		cYandexOAuth.c \
 		AppDelegate.m \
 		Item.m \
 		RootViewController.m \
