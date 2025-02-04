@@ -13,7 +13,7 @@
 #include "UIKit/UIKit.h"
 #include <stdio.h>
 #include "Foundation/Foundation.h"
-#include "../cYandexDisk/cYandexOAuth.h"
+#include "../cYandexMusic/cYandexOAuth.h"
 
 #define CLIENTID "23cabbbdc6cd418abb4b39c32c41195d"
 #define CLIENTSECRET "53bc75238f0c4d08a118e51fe9203300"
@@ -57,7 +57,7 @@
 		c_yandex_oauth_code_from_user(
 				CLIENTID, 
 			  UIDevice.currentDevice.name.UTF8String, 
-				self, 
+				(__bridge void*)self, 
 				code_callback);
 }
 
@@ -70,7 +70,7 @@ static int token_callback(
 			const char * error
 			)
 {
-	YandexConnect *self = user_data;
+	YandexConnect *self = (__bridge YandexConnect *)user_data;
 	AppDelegate *appDelegate = 
 		UIApplication.sharedApplication.delegate;
 	
@@ -103,7 +103,7 @@ static int code_callback(
 			const char * error
 			)
 {
-	YandexConnect *self = user_data;
+	YandexConnect *self = (__bridge YandexConnect *)user_data;
 	AppDelegate *appDelegate = 
 		UIApplication.sharedApplication.delegate;
 
@@ -125,7 +125,7 @@ static int code_callback(
 				CLIENTSECRET, 
 				interval, 
 				expires_in, 
-				self, 
+				(__bridge void*)self, 
 				token_callback);
 	}];
 
