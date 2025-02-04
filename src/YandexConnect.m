@@ -13,7 +13,7 @@
 #include "UIKit/UIKit.h"
 #include <stdio.h>
 #include "Foundation/Foundation.h"
-//#include "cYandexOAuth.h"
+#include "../cYandexDisk/cYandexOAuth.h"
 
 #define CLIENTID "23cabbbdc6cd418abb4b39c32c41195d"
 #define CLIENTSECRET "53bc75238f0c4d08a118e51fe9203300"
